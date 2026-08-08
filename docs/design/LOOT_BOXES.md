@@ -227,6 +227,51 @@ thread for around a second on a large pack, and `give` produces items from nothi
 entry that matches nothing looks exactly like one that matches a chest you have not opened yet — and
 the pack author finds out weeks later.
 
+## Crafting: upgrades only
+
+Three shapeless recipes, and no others:
+
+| Recipe | Result |
+| --- | --- |
+| 4 × common box | 1 uncommon box |
+| 6 × uncommon box | 1 rare box |
+| 9 × rare box | 1 legendary box |
+
+**A box can never be crafted from ordinary materials, and that is a hard design limit rather than an
+unfinished feature.** A loot box hands out items scored against a pack the mod has never seen, so any
+recipe creating a box from raw materials is an item generator whose profitability nobody can
+predict — least of all LBE, which cannot know whether a given pack's "eight gold ingots" is a
+morning's work or a rounding error. Get it wrong in a pack's favour and the mod is a duplication
+exploit; get it wrong the other way and the recipe is dead weight.
+
+Upgrades dodge the question completely by being a **sink**. Every box consumed came out of the
+world, so the total number of boxes in existence only ever falls. What the player gains is agency —
+a way to turn a chest of surplus commons into the one legendary they actually wanted — with no new
+boxes entering the economy.
+
+### The ratios, and the tax
+
+216 commons make a legendary (4 × 6 × 9). Natural generation yields roughly 125 commons per
+legendary over the same exploration, so **upgrading costs about 1.7× more than simply finding one**.
+
+That tax is deliberate. Converting should be a considered choice with a real cost, not the efficient
+path — if upgrading were cheaper than exploring, nobody would ever look for a legendary box again,
+and the world generation rates that give the mod its pace would stop mattering.
+
+The counts are ordinary recipe JSON, so a pack can retune them without touching code.
+
+### Why the recipes are data, not code
+
+They carry a Forge recipe condition (`lbe:upgrade_recipes_enabled`, backed by
+`crafting/UpgradeRecipesCondition`) wired up through `recipes/_factories.json`. That keeps
+`general.enableUpgradeRecipes` working as a config switch while leaving the recipes as JSON —
+overridable by a resource pack, removable by CraftTweaker, and visible to JEI. Registering them in
+code behind an `if` would have cost all three for the sake of one boolean.
+
+Each recipe ships an advancement under `advancements/recipes/lbe/` that unlocks it in the recipe book
+once the player holds a box of the input tier — so the upgrade path is discovered by finding a box,
+which is the right way round.
+
 ## Loot-table injection
 
 Off by default (`worldgen.injectIntoLootTables`). Natural generation already places boxes, and a pack

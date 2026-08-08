@@ -1,0 +1,42 @@
+{
+  "conditions": [
+    {
+      "type": "lbe:upgrade_recipes_enabled"
+    }
+  ],
+  "type": "minecraft:crafting_shapeless",
+  "group": "lbe:loot_box_upgrade",
+  "ingredients": [
+    {
+      "item": "lbe:loot_box_rare"
+    },
+    {
+      "item": "lbe:loot_box_rare"
+    },
+    {
+      "item": "lbe:loot_box_rare"
+    },
+    {
+      "item": "lbe:loot_box_rare"
+    },
+    {
+      "item": "lbe:loot_box_rare"
+    },
+    {
+      "item": "lbe:loot_box_rare"
+    },
+    {
+      "item": "lbe:loot_box_rare"
+    },
+    {
+      "item": "lbe:loot_box_rare"
+    },
+    {
+      "item": "lbe:loot_box_rare"
+    }
+  ],
+  "result": {
+    "item": "lbe:loot_box_legendary",
+    "count": 1
+  }
+}

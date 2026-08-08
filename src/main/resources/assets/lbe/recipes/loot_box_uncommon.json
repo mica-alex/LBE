@@ -1,0 +1,27 @@
+{
+  "conditions": [
+    {
+      "type": "lbe:upgrade_recipes_enabled"
+    }
+  ],
+  "type": "minecraft:crafting_shapeless",
+  "group": "lbe:loot_box_upgrade",
+  "ingredients": [
+    {
+      "item": "lbe:loot_box_common"
+    },
+    {
+      "item": "lbe:loot_box_common"
+    },
+    {
+      "item": "lbe:loot_box_common"
+    },
+    {
+      "item": "lbe:loot_box_common"
+    }
+  ],
+  "result": {
+    "item": "lbe:loot_box_uncommon",
+    "count": 1
+  }
+}

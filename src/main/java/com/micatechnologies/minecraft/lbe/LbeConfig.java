@@ -57,6 +57,28 @@ public final class LbeConfig {
     public static boolean enableWorldGen = true;
 
     /**
+     * Whether the three box-upgrade recipes are craftable.
+     *
+     * <p><b>Upgrades are the only recipes this mod has, and that is a deliberate limit rather than
+     * an unfinished feature.</b> A loot box hands out items scored against a pack the mod has never
+     * seen, so any recipe that creates a box from ordinary materials is an item generator whose
+     * profitability nobody can predict — least of all LBE, which cannot know whether a given pack's
+     * "eight gold ingots" is a morning's work or a rounding error.</p>
+     *
+     * <p>Upgrade recipes sidestep that entirely by being a <b>sink</b>: every box that goes in came
+     * out of the world, so the total number of boxes only ever falls. What a player gains is agency —
+     * a way to turn a chest full of surplus commons into the one legendary they actually wanted —
+     * without any new boxes entering the economy.</p>
+     *
+     * <p>Ratios are 4 → 1, 6 → 1, 9 → 1 going up the tiers, which is 216 commons for a legendary.
+     * The natural generation rates produce roughly 125 commons per legendary over the same
+     * exploration, so upgrading is about <b>1.7× more expensive than simply finding one</b>. That tax
+     * is the point: converting should be a deliberate choice with a cost, not the efficient path.
+     * Change the counts by editing the recipe JSONs — they are ordinary data.</p>
+     */
+    public static boolean enableUpgradeRecipes = true;
+
+    /**
      * Log the full scored catalogue at startup.
      *
      * <p>Off by default and should stay off in production — on a large pack this is tens of
@@ -381,6 +403,20 @@ public final class LbeConfig {
             "Whether loot boxes generate naturally in the world. Turning this off does not remove "
                 + "the boxes — they can still be given with /lbe give, placed from the creative "
                 + "tab, or written into structures and other mods' loot tables.");
+        enableUpgradeRecipes = config.getBoolean("enableUpgradeRecipes", CATEGORY_GENERAL,
+            enableUpgradeRecipes,
+            "Whether loot boxes can be combined upward: 4 common -> 1 uncommon, 6 uncommon -> "
+                + "1 rare, 9 rare -> 1 legendary." + NL
+                + NL
+                + "These are the only recipes the mod has, on purpose. A box hands out items scored "
+                + "against a pack LBE has never seen, so a recipe that makes a box out of ordinary "
+                + "materials is an item generator whose profitability nobody can predict. Upgrades "
+                + "avoid that by being a SINK -- every box consumed came out of the world, so the "
+                + "total number of boxes only ever falls." + NL
+                + NL
+                + "216 commons make a legendary; natural generation yields roughly 125 commons per "
+                + "legendary over the same exploration, so upgrading costs about 1.7x more than "
+                + "just finding one. Edit the recipe JSONs to change the counts.");
         logCatalogueOnStartup = config.getBoolean("logCatalogueOnStartup", CATEGORY_GENERAL,
             logCatalogueOnStartup,
             "Log every scored item and its tier at startup. Tens of thousands of lines on a large "

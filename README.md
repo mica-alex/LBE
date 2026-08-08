@@ -43,8 +43,8 @@ different ways to fix it, and they are not the same thing:
 > dev client generates, renders and opens boxes with no missing models. On vanilla + TheOneProbe it
 > scores 629 item variants in ~30 ms and lands them at 384 / 168 / 58 / 19 across the four tiers.
 >
-> Not yet done: crafting recipes for the boxes themselves, and a resource-pack-friendly pass over the
-> textures (they are generated, and now decent, but they are not hand-drawn art).
+> Not yet done: a GitHub remote (the release workflow is wired and waiting), and richer structure
+> integration beyond the opt-in chest loot.
 
 ## How it comes out on vanilla
 
@@ -77,6 +77,10 @@ surface or in cave air pockets. Higher tiers glow.
   the rarest box in the game to also be the emptiest.
 - **It builds to the good stuff.** Filler is revealed first, features last, so a box peaks at the end
   rather than in its opening second.
+- **Boxes combine upward, and cannot be crafted from scratch.** 4 common → 1 uncommon, 6 → 1 rare,
+  9 → 1 legendary. Crafting a box out of raw materials would be an item generator whose profitability
+  the mod has no way to predict; upgrades are a *sink*, so the total number of boxes only ever falls.
+  Upgrading costs ~1.7× more than finding one, so it buys you control rather than efficiency.
 
 ## Commands
 

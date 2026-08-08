@@ -1,0 +1,5 @@
+{
+  "conditions": {
+    "upgrade_recipes_enabled": "com.micatechnologies.minecraft.lbe.crafting.UpgradeRecipesCondition"
+  }
+}
