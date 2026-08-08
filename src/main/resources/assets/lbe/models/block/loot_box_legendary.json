@@ -1,0 +1,8 @@
+{
+  "parent": "block/cube_bottom_top",
+  "textures": {
+    "top": "lbe:blocks/loot_box_legendary_top",
+    "bottom": "lbe:blocks/loot_box_legendary_top",
+    "side": "lbe:blocks/loot_box_legendary_side"
+  }
+}

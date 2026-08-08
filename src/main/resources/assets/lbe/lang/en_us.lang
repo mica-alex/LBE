@@ -1,0 +1,12 @@
+# Loot Box Extravaganza — US English
+#
+# Block names follow the translation keys set in BlockLootBox: tile.lbe.loot_box_<tier>.name
+
+itemGroup.lbe=Loot Box Extravaganza
+
+tile.lbe.loot_box_common.name=Common Loot Box
+tile.lbe.loot_box_uncommon.name=Uncommon Loot Box
+tile.lbe.loot_box_rare.name=Rare Loot Box
+tile.lbe.loot_box_legendary.name=Legendary Loot Box
+
+lbe.command.rarity.nothing_held=Hold an item, or name one: /lbe rarity <modid:name[#meta]>
