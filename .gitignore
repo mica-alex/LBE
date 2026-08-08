@@ -1,0 +1,121 @@
+.nopublish
+
+### Windows ###
+
+thumbs.db
+*.db
+
+### Java ###
+
+*.class
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.war
+*.ear
+
+# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+hs_err_pid*
+
+### Eclipse ###
+
+*.pydevproject
+.metadata
+.gradle
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+/eclipse
+
+# Eclipse Core
+.project
+
+# External tool builders
+.externalToolBuilders/
+
+# Locally stored "Eclipse launch configurations"
+*.launch
+
+# CDT-specific
+.cproject
+
+# JDT-specific (Eclipse Java Development Tools)
+.classpath
+
+# Java annotation processor (APT)
+.factorypath
+
+# PDT-specific
+.buildpath
+
+# sbteclipse plugin
+.target
+
+# TeXlipse plugin
+.texlipse
+
+### Intellij IDEA ###
+
+*.iml
+*.ipr
+*.iws
+
+.idea/
+.idea_modules/
+/classes/
+/out/
+/build/
+
+# Linux
+*~
+
+run/*
+!run/config/
+run/config/*
+!run/config/lwjgl3ify-early.json
+
+logs/
+crash-reports/
+
+# Output of .github/scripts/server-smoke-test.sh when run locally.
+server-smoke.log
+
+# Rarity-engine dumps. `/lbe rarity dump` writes the scored catalogue here so a pack author can
+# see what the scorer made of their modpack. It is a snapshot of one install's mod list — large,
+# machine-specific, and meaningless in another checkout.
+/rarity-dumps/
+
+# macOS Finder metadata
+.DS_Store
+
+# Local-only Claude Code state
+.claude/settings.local.json
+.claude/worktrees/
+
+# Agent working notes and implementation plans. Local scratch by design — these churn
+# constantly and are written for whoever/whatever is doing the work right now, not for
+# the repo's history. Matches docs/AGENT-PLANS/ in LDIB and docs/agent_progress/ in the
+# other sibling Mica mods.
+docs/AGENT-PLANS/
+
+# Local reference: cloned/decompiled third-party mod source for analysis only.
+# Never committed (license + repo-hygiene reasons).
+example-source/
+
+# x86_64 LWJGL2 natives for the `runClient -Prosetta` Apple Silicon path.
+# Repopulate per the instructions in addon.gradle.
+.rosetta-natives/
+
+# Secrets
+*.env
+.env.*
+*credentials*
+__pycache__/

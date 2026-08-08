@@ -1,0 +1,46 @@
+//file:noinspection DependencyNotationArgument
+// TODO remove when fixed in RFG ^
+/*
+ * Add your dependencies here. Supported configurations:
+ *  - api("group:name:version:classifier"): if you use the types from this dependency in the public API of this mod
+ *       Available at runtime and compiletime for mods depending on this mod
+ *  - implementation("g:n:v:c"): if you need this for internal implementation details of the mod, but none of it is visible via the public API
+ *       Available at runtime but not compiletime for mods depending on this mod
+ *  - compileOnly("g:n:v:c"): if the mod you're building doesn't need this dependency during runtime at all, e.g. for optional mods
+ *       Not available at all for mods depending on this mod, only visible at compiletime for this mod
+ *  - compileOnlyApi("g:n:v:c"): like compileOnly, but also visible at compiletime for mods depending on this mod
+ *       Available at compiletime but not runtime for mods depending on this mod
+ *  - runtimeOnlyNonPublishable("g:n:v:c"): if you want to include a mod in this mod's runClient/runServer runs, but not publish it as a dependency
+ *       Not available at all for mods depending on this mod, only visible at runtime for this mod
+ *  - devOnlyNonPublishable("g:n:v:c"): a combination of runtimeOnlyNonPublishable and compileOnly for dependencies present at both compiletime and runtime,
+ *       but not published as Maven dependencies - useful for RFG-deobfuscated dependencies or local testing
+ *  - runtimeOnly("g:n:v:c"): if you don't need this at compile time, but want it to be present at runtime
+ *       Available at runtime for mods depending on this mod
+ *  - annotationProcessor("g:n:v:c"): mostly for java compiler plugins, if you know you need this, use it, otherwise don't worry
+ *  - testCONFIG("g:n:v:c") - replace CONFIG by one of the above (except api), same as above but for the test sources instead of main
+ *
+ *  - shadowImplementation("g:n:v:c"): effectively the same as API, but the dependency is included in your jar under a renamed package name
+ *       Requires you to enable usesShadowedDependencies in gradle.properties
+ *       For more info, see https://github.com/GregTechCEu/Buildscripts/blob/master/docs/shadow.md
+ *
+ * To add a mod with CurseMaven, replace '("g:n:v:c")' in the above with 'rfg.deobf("curse.maven:project_slug-project_id:file_id")'
+ * Example: devOnlyNonPublishable(rfg.deobf("curse.maven:top-245211:2667280"))
+ */
+dependencies {
+    // LBE has no third-party mod dependencies, and it must stay that way.
+    //
+    // "Support all other mods" is the headline feature, and the only implementation of it that scales
+    // is the one that depends on none of them: read Forge's item and recipe registries at postInit,
+    // score whatever is there, and let the config override anything the scorer gets wrong. A compile
+    // dependency on a supported mod would be a promise we'd have to keep for every mod anyone installs.
+    //
+    // Deliberately NOT depended on:
+    //   - Any specific content mod. If a mod needs special handling, that belongs in the config's
+    //     override table (which ships with defaults and is data, not code), not in a `dependencies` line.
+    //   - LootTweaker / CraftTweaker. Excellent for hand-authored loot, and exactly the manual approach
+    //     LBE exists to avoid. A player who wants hand-authored pools can still get them via the
+    //     per-item overrides.
+    //
+    // JEI and TheOneProbe are on the dev classpath via includeCommonDevEnvMods. JEI is genuinely
+    // useful here — it puts a large real modded registry in front of the scorer during development.
+}

@@ -1,0 +1,17 @@
+// Add any additional repositories for your dependencies here.
+//
+// The GTCEu buildscript already wires CurseMaven, Modrinth, BlameJared and the other
+// well-known 1.12.2 repositories (see `includeWellKnownRepositories` in
+// buildscript.properties), so most mod dependencies need nothing here.
+
+repositories {
+    // Intentionally empty.
+    //
+    // LBE is designed to need no repository entry per supported mod — that is the entire point of
+    // scoring items from the live registries at runtime instead of shipping a hand-written table per
+    // mod. If a *soft* integration ever justifies a compile-time dependency, follow the pattern SUM
+    // uses for CSM: an Ivy repo pointed at the GitHub Releases download URL, version pinned in
+    // gradle.properties. GitHub releases ship no Maven metadata, so such a repo needs
+    // `metadataSources { artifact() }` and a `content { includeGroup '...' }` block to keep unrelated
+    // resolution off GitHub.
+}
