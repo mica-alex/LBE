@@ -7,6 +7,7 @@ import com.micatechnologies.minecraft.lbe.catalog.ForgeItemGraph;
 import com.micatechnologies.minecraft.lbe.catalog.LootCatalog;
 import com.micatechnologies.minecraft.lbe.rarity.ItemKeys;
 import com.micatechnologies.minecraft.lbe.rarity.Rarity;
+import com.micatechnologies.minecraft.lbe.world.LootTableInjector;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -46,7 +47,7 @@ public class CommandLbe extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/lbe <rarity|dump|reload|give|place>";
+        return "/lbe <rarity|dump|reload|give|place|loottables>";
     }
 
     /**
@@ -84,6 +85,9 @@ public class CommandLbe extends CommandBase {
         else if ("place".equals(subcommand)) {
             place(sender, args);
         }
+        else if ("loottables".equals(subcommand)) {
+            lootTables(server, sender);
+        }
         else {
             throw new WrongUsageException(getUsage(sender));
         }
@@ -120,6 +124,58 @@ public class CommandLbe extends CommandBase {
         catch (java.io.IOException e) {
             throw new CommandException("Could not write the dump: " + e.getMessage());
         }
+    }
+
+    /**
+     * Force every configured loot table to load and report which ones got a loot-box pool.
+     *
+     * <p>Exists because loot-table injection is otherwise <b>unobservable</b>. Tables load lazily —
+     * the first time something asks for one — so a prefix in the config that matches nothing looks
+     * exactly like a prefix that matches something you have not opened a chest from yet, and the
+     * pack author finds out weeks later. Asking for each table here triggers
+     * {@code LootTableLoadEvent} on the spot and turns "did my config work?" into a question with an
+     * immediate answer.</p>
+     */
+    private void lootTables(MinecraftServer server, ICommandSender sender) {
+        if (!LbeConfig.injectIntoLootTables) {
+            sender.sendMessage(new TextComponentString(
+                "Loot-table injection is OFF (worldgen.injectIntoLootTables)."));
+            return;
+        }
+        net.minecraft.world.storage.loot.LootTableManager manager =
+            server.getWorld(0).getLootTableManager();
+
+        int matched = 0;
+        int missing = 0;
+        for (String target : LbeConfig.lootTableTargets) {
+            String name = target == null ? "" : target.trim();
+            if (name.isEmpty() || name.charAt(0) == '#') {
+                continue;
+            }
+            // A prefix entry ('minecraft:chests/') is not itself a loadable table, so asking for it
+            // would be meaningless; it can only be confirmed by whatever it matches.
+            if (name.endsWith("/")) {
+                sender.sendMessage(new TextComponentString(
+                    "  " + name + " — prefix, matches on demand"));
+                continue;
+            }
+            net.minecraft.world.storage.loot.LootTable table =
+                manager.getLootTableFromLocation(new net.minecraft.util.ResourceLocation(name));
+            boolean injected = table != null
+                && table != net.minecraft.world.storage.loot.LootTable.EMPTY_LOOT_TABLE
+                && table.getPool(LootTableInjector.poolName()) != null;
+            if (injected) {
+                matched++;
+            }
+            else {
+                missing++;
+            }
+            sender.sendMessage(new TextComponentString(
+                (injected ? "  §a✔ " : "  §c✘ ") + name
+                    + (injected ? "" : " — no pool added (table missing, or not matched)")));
+        }
+        sender.sendMessage(new TextComponentString(
+            matched + " table(s) carry a loot-box pool, " + missing + " did not."));
     }
 
     private void reload(ICommandSender sender) {
@@ -197,7 +253,7 @@ public class CommandLbe extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args,
-                "rarity", "dump", "reload", "give", "place");
+                "rarity", "dump", "reload", "give", "place", "loottables");
         }
         if (args.length == 2 && ("give".equalsIgnoreCase(args[0]) || "place".equalsIgnoreCase(args[0]))) {
             List<String> tiers = new ArrayList<>();
