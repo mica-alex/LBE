@@ -33,37 +33,70 @@ public final class LootRoller {
         if (table == null || table.size() == 0) {
             return rolled;
         }
-        int min = rules.minRolls(boxTier);
-        int max = rules.maxRolls(boxTier);
-        int entries = min + (max > min ? random.nextInt(max - min + 1) : 0);
+        int features = between(rules.minFeatures(boxTier), rules.maxFeatures(boxTier), random);
+        int total = between(rules.minItems(boxTier), rules.maxItems(boxTier), random);
+        total = Math.max(total, features);
 
-        for (int i = 0; i < entries; i++) {
-            Rarity drawTier = shiftTier(boxTier, rules, random);
-            String key = drawFrom(table, drawTier, random);
-            if (key == null) {
-                continue;
-            }
-            int count = 1 + random.nextInt(Math.max(1, rules.maxStackPerRoll(drawTier)));
-            rolled.add(new RolledEntry(key, count, drawTier));
+        // FILLER FIRST, FEATURES LAST — and this ordering is load-bearing, not cosmetic. The reveal
+        // screen walks this list in order, so putting the good item first means every legendary box
+        // peaks in its opening second and then shows you three lumps of cobblestone. Building to the
+        // feature is the entire shape of the moment.
+        for (int i = 0; i < total - features; i++) {
+            addEntry(rolled, fillerTier(boxTier, rules, random), table, rules, random);
+        }
+        for (int i = 0; i < features; i++) {
+            addEntry(rolled, featureTier(boxTier, rules, random), table, rules, random);
         }
         return rolled;
     }
 
+    private static int between(int min, int max, Random random) {
+        return max > min ? min + random.nextInt(max - min + 1) : min;
+    }
+
+    private static void addEntry(List<RolledEntry> rolled, Rarity drawTier, RarityTable table,
+                                 LootRules rules, Random random) {
+        String key = drawFrom(table, drawTier, random);
+        if (key == null) {
+            return;
+        }
+        int count = 1 + random.nextInt(Math.max(1, rules.maxStackPerRoll(drawTier)));
+        rolled.add(new RolledEntry(key, count, drawTier));
+    }
+
     /**
-     * Apply the bleed-up/bleed-down chances to one draw.
+     * The tier for a <b>feature</b> slot: the box's own, or occasionally the one above.
      *
-     * <p>Up is checked first so that when both rolls would succeed the player gets the good outcome.
-     * That is a deliberate thumb on the scale — the two chances are independent, both are small, and
-     * on the rare occasion they collide there is no reason to hand the player the worse of the two.</p>
+     * <p>A feature slot never drops below the box's tier. That guarantee is what the label on the lid
+     * means, and it is the reason features and filler are separate concepts at all — see
+     * {@link LootRules}.</p>
      */
-    private static Rarity shiftTier(Rarity boxTier, LootRules rules, Random random) {
-        if (random.nextDouble() < rules.bleedUpChance() && boxTier != Rarity.highest()) {
+    private static Rarity featureTier(Rarity boxTier, LootRules rules, Random random) {
+        if (boxTier != Rarity.highest() && random.nextDouble() < rules.bleedUpChance()) {
             return Rarity.values()[boxTier.ordinal() + 1];
         }
-        if (random.nextDouble() < rules.bleedDownChance() && boxTier != Rarity.lowest()) {
-            return Rarity.values()[boxTier.ordinal() - 1];
-        }
         return boxTier;
+    }
+
+    /**
+     * The tier for a <b>filler</b> slot: one below the box, sometimes further.
+     *
+     * <p>The falloff is applied repeatedly rather than as a flat spread, so filler clusters just under
+     * the box's tier and thins out sharply below it. A legendary box's filler is mostly rare, some
+     * uncommon, rarely common — which keeps the box feeling like a legendary box all the way through
+     * rather than one trophy in a bag of gravel.</p>
+     *
+     * <p>A common box has nothing below it, so its filler is common too.</p>
+     */
+    private static Rarity fillerTier(Rarity boxTier, LootRules rules, Random random) {
+        int tier = boxTier.ordinal() - 1;
+        if (tier < 0) {
+            return Rarity.lowest();
+        }
+        while (tier > 0 && random.nextDouble() < rules.fillerFalloff()) {
+            tier--;
+        }
+        return Rarity.values()[tier];
     }
 
     /**

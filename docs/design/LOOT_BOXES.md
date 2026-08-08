@@ -120,27 +120,58 @@ they skip.
 `LootRules` (config category `loot`) decides generosity, independently of the scoring model — so
 legendary boxes can be made more generous without reclassifying a single item.
 
-| Tier | Entries | Max pile per entry |
-| --- | --- | --- |
-| Common | 3–5 | 16 |
-| Uncommon | 3–4 | 8 |
-| Rare | 2–3 | 4 |
-| Legendary | 1–2 | 1 |
+A box's contents are **two different things**, and this is the distinction that matters most:
 
-The per-entry pile is capped again at the item's real max stack size when the roll is realised —
-`LootRules` works in tier-level caps and has no way to know that a given item only stacks to 16.
+- **Feature items** — guaranteed to be at the box's own tier. This is what the label on the lid
+  actually promises.
+- **Filler** — everything else, drawn from the tiers below.
 
-### Tier bleed
+They are separate settings because with a single "how many items" number, the only way to make a
+legendary box feel exclusive is to make it hand over one item — so the rarest box in the game becomes
+the emptiest, which is precisely backwards. Split, a legendary box is **exclusive and generous at
+once**.
 
-Each entry has a small chance of being drawn from a neighbouring tier: **25% down**, **4% up**.
+| Tier | Total items | At its own tier | Max pile per at-tier item |
+| --- | --- | --- | --- |
+| Common | 4–6 | 2–3 | 16 |
+| Uncommon | 4–5 | 2 | 8 |
+| Rare | 4–5 | 1–2 | 4 |
+| Legendary | 4–5 | 1–2 | 1 |
 
-Bleeding *down* is what stops a high-tier box being a humourless list of trophies with nothing
-ordinary in it, and it is the main lever on how generous the mod feels overall. Bleeding *up* is the
-jackpot, and it is small on purpose — a common box that regularly pays out legendary loot has quietly
-abolished its own ladder.
+Every tier gives about the same number of things. What changes with the tier is **how many of them
+are worth having**. Measured over 20,000 simulated boxes per tier at the defaults:
 
-Where both would fire, up wins. The two chances are independent and both small; on the rare occasion
-they collide there is no reason to hand the player the worse outcome.
+| Box | Avg items | Common | Uncommon | Rare | Legendary |
+| --- | --- | --- | --- | --- | --- |
+| Common | 4.99 | 98.0% | 2.0% | — | — |
+| Uncommon | 4.50 | 55.5% | 42.7% | 1.8% | — |
+| Rare | 4.50 | 23.5% | 43.2% | 32.0% | 1.3% |
+| Legendary | 4.50 | 8.0% | 15.3% | 43.6% | 33.1% |
+
+`maxStackPerRoll` is indexed by the tier an item was **drawn from**, not the box's — so a common
+filler item can arrive as a stack of sixteen inside a legendary box while the legendary item beside
+it arrives as one. It is capped again at the item's real max stack size when the roll is realised.
+
+### Filler falls away, it does not spread
+
+Filler starts one tier below the box and steps down again with probability `fillerTierFalloff`
+(0.35), repeatedly. So it clusters just under the box's tier and thins sharply below — a legendary
+box's filler is mostly rare, some uncommon, rarely common. That keeps the box feeling like a
+legendary box all the way through rather than one trophy in a bag of gravel.
+
+A common box has nothing below it, so all of its filler is common.
+
+### The jackpot
+
+A **feature** slot has a 4% chance of being drawn from the tier *above* the box's. Feature slots
+never go *down* — that guarantee is what the tier on the lid means. Small on purpose: a common box
+that regularly pays out legendary loot has quietly abolished its own ladder.
+
+### Features come last, and that is load-bearing
+
+The roll returns filler first and features last, and the reveal screen walks the list in order. Put
+the good item first and every legendary box peaks in its opening second, then shows you three lumps
+of cobblestone. Building to the feature is the entire shape of the moment.
 
 ### Empty tiers
 

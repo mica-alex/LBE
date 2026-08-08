@@ -36,6 +36,15 @@ import net.minecraftforge.common.config.Configuration;
  */
 public final class LbeConfig {
 
+    /**
+     * Line break for multi-line category comments.
+     *
+     * <p>A named constant because Forge writes these straight into the {@code .cfg}, and an inline
+     * {@code "\n"} in a long concatenated comment is both easy to lose track of and easy for an
+     * editing tool to mangle into a real line break in the Java source.</p>
+     */
+    private static final String NL = "\n";
+
     public static final String CATEGORY_GENERAL = "general";
     public static final String CATEGORY_WORLDGEN = "worldgen";
     public static final String CATEGORY_RARITY = "rarity";
@@ -287,17 +296,30 @@ public final class LbeConfig {
 
     // --- loot: what a box is worth ----------------------------------------------------------------
 
-    /** Fewest item entries a box of each tier gives, indexed by {@link Rarity#ordinal()}. */
-    public static int[] lootMinRolls = { 3, 3, 2, 1 };
+    /** Fewest total items a box of each tier gives, indexed by {@link Rarity#ordinal()}. */
+    public static int[] lootMinItems = { 4, 4, 4, 4 };
 
-    /** Most item entries a box of each tier gives. */
-    public static int[] lootMaxRolls = { 5, 4, 3, 2 };
+    /** Most total items a box of each tier gives. */
+    public static int[] lootMaxItems = { 6, 5, 5, 5 };
 
-    /** Largest pile one entry may be, per tier, before the item's own stack limit applies. */
+    /**
+     * Fewest items guaranteed at the box's <b>own</b> tier — what the label on the lid promises.
+     *
+     * @see LootRules
+     */
+    public static int[] lootMinFeatureItems = { 2, 2, 1, 1 };
+
+    /** Most items at the box's own tier. */
+    public static int[] lootMaxFeatureItems = { 3, 2, 2, 2 };
+
+    /**
+     * Largest pile one entry may be, indexed by the tier the item was <b>drawn from</b> (not the
+     * box's), before the item's own stack limit applies.
+     */
     public static int[] lootMaxStackPerRoll = { 16, 8, 4, 1 };
 
-    /** @see LootRules#bleedDownChance() */
-    public static double lootBleedDownChance = 0.25D;
+    /** @see LootRules#fillerFalloff() */
+    public static double lootFillerFalloff = 0.35D;
 
     /** @see LootRules#bleedUpChance() */
     public static double lootBleedUpChance = 0.04D;
@@ -486,23 +508,46 @@ public final class LbeConfig {
         config.addCustomCategoryComment(CATEGORY_LOOT,
             "What opening a box of each tier is actually worth. Independent of the scoring model "
                 + "above on purpose: you can make legendary boxes more generous without "
-                + "reclassifying a single item.");
-        lootMinRolls = config.get(CATEGORY_LOOT, "minRolls", lootMinRolls,
-            "Fewest item entries a box gives, in order: " + tierOrderComment()).getIntList();
-        lootMaxRolls = config.get(CATEGORY_LOOT, "maxRolls", lootMaxRolls,
-            "Most item entries a box gives, in order: " + tierOrderComment()).getIntList();
+                + "reclassifying a single item." + NL
+                + NL
+                + "A box's contents are two different things:" + NL
+                + "  FEATURE items - guaranteed to be at the box's own tier. This is what the "
+                + "label on the lid actually promises." + NL
+                + "  FILLER        - everything else, drawn from the tiers below." + NL
+                + NL
+                + "They are separate settings because with a single 'how many items' number the "
+                + "only way to make a legendary box exclusive is to make it hand over one item, "
+                + "so the rarest box in the game becomes the emptiest -- which is backwards. "
+                + "Split, a legendary box can be exclusive AND generous: two legendary items "
+                + "plus a couple of rare ones.");
+        lootMinItems = config.get(CATEGORY_LOOT, "minItems", lootMinItems,
+            "Fewest TOTAL items a box gives, in order: " + tierOrderComment()).getIntList();
+        lootMaxItems = config.get(CATEGORY_LOOT, "maxItems", lootMaxItems,
+            "Most TOTAL items a box gives, in order: " + tierOrderComment()).getIntList();
+        lootMinFeatureItems = config.get(CATEGORY_LOOT, "minFeatureItems", lootMinFeatureItems,
+            "Fewest items guaranteed at the box's OWN tier, in order: " + tierOrderComment()
+                + ". The rest of the box is filler from the tiers below. Raising this makes a box "
+                + "more exclusive without making it smaller.").getIntList();
+        lootMaxFeatureItems = config.get(CATEGORY_LOOT, "maxFeatureItems", lootMaxFeatureItems,
+            "Most items at the box's own tier, in order: " + tierOrderComment()
+                + ". Clamped up to at least minFeatureItems, and totals are clamped up to at least "
+                + "this -- a box can never contain fewer items than it guarantees.").getIntList();
         lootMaxStackPerRoll = config.get(CATEGORY_LOOT, "maxStackPerRoll", lootMaxStackPerRoll,
-            "Largest pile a single entry may be, per tier, before the item's own stack limit is "
-                + "applied. This is what keeps a legendary box from handing out 32 of anything.")
+            "Largest pile a single entry may be, indexed by the tier the item was DRAWN FROM (not "
+                + "the box's), before the item's own stack limit is applied. So a common filler item "
+                + "can arrive as sixteen inside a legendary box while the legendary item beside it "
+                + "arrives as one.")
             .getIntList();
-        lootBleedDownChance = config.getFloat("bleedDownChance", CATEGORY_LOOT,
-            (float) lootBleedDownChance, 0.0F, 1.0F,
-            "Chance that any one entry is drawn from the tier BELOW the box's. Keeps high-tier "
-                + "boxes from being a list of trophies with nothing ordinary in them.");
+        lootFillerFalloff = config.getFloat("fillerTierFalloff", CATEGORY_LOOT,
+            (float) lootFillerFalloff, 0.0F, 1.0F,
+            "Chance a filler item drops one tier FURTHER than the tier just below the box. Applied "
+                + "repeatedly, so most filler sits one tier down, some two, very little below that. "
+                + "At 0 all filler sits exactly one tier below the box.");
         lootBleedUpChance = config.getFloat("bleedUpChance", CATEGORY_LOOT,
             (float) lootBleedUpChance, 0.0F, 1.0F,
-            "Chance that any one entry is drawn from the tier ABOVE. The jackpot. Keep it small: a "
-                + "common box that regularly pays out legendary loot has abolished its own ladder.");
+            "Chance that a FEATURE slot is drawn from the tier ABOVE the box's. The jackpot. Keep it "
+                + "small: a common box that regularly pays out legendary loot has abolished its own "
+                + "ladder.");
 
         config.addCustomCategoryComment(CATEGORY_OVERRIDES,
             "Manual per-item rarity. This is the escape hatch for anything the automatic scoring "
@@ -549,8 +594,8 @@ public final class LbeConfig {
 
     /** The loot generosity rules, as the roller wants them. */
     public static LootRules lootRules() {
-        return new LootRules(lootMinRolls, lootMaxRolls, lootMaxStackPerRoll,
-            lootBleedDownChance, lootBleedUpChance);
+        return new LootRules(lootMinItems, lootMaxItems, lootMinFeatureItems, lootMaxFeatureItems,
+            lootMaxStackPerRoll, lootFillerFalloff, lootBleedUpChance);
     }
 
     /** The parsed override table. */

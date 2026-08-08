@@ -38,13 +38,13 @@ different ways to fix it, and they are not the same thing:
 | For | a material whose cost the recipe walk cannot see (an ore, a mob drop) | one item that landed in the wrong tier |
 | e.g. | `minecraft:diamond=8.0` — makes diamond *tools* valuable too | `minecraft:dragon_egg=legendary` |
 
-> **Status: scaffold — builds, boots and produces a sensible catalogue.** `./gradlew build` is green
-> (Forge 1.12.2, 58 unit tests, jar produced) and a real dedicated server boots with the catalogue
-> built. On vanilla + TheOneProbe it scores 629 item variants in ~30 ms and lands them at
-> 384 / 168 / 58 / 19 across the four tiers.
+> **Status: alpha — playable, and confirmed working in-game.** `./gradlew build` is green (Forge
+> 1.12.2, 64 unit tests, jar produced); a real dedicated server boots with the catalogue built; and a
+> dev client generates, renders and opens boxes with no missing models. On vanilla + TheOneProbe it
+> scores 629 item variants in ~30 ms and lands them at 384 / 168 / 58 / 19 across the four tiers.
 >
-> Not yet done: a tile-entity renderer or opening animation, crafting recipes for the boxes
-> themselves, and structure/chest integration. The textures are generated placeholders.
+> Not yet done: crafting recipes for the boxes themselves, and a resource-pack-friendly pass over the
+> textures (they are generated, and now decent, but they are not hand-drawn art).
 
 ## How it comes out on vanilla
 
@@ -71,9 +71,12 @@ surface or in cave air pockets. Higher tiers glow.
 - **Break it to move it, not to open it.** The box drops itself with its seed intact, so you can
   carry a find home and open it where your storage is — and so you cannot break-and-replace a box to
   re-roll it until you like the answer.
-- **Tiers bleed.** Each item has a 25% chance of coming from the tier below and a 4% chance of coming
-  from the tier above. The first stops a legendary box being a humourless list of trophies; the
-  second is the jackpot, and is small on purpose.
+- **Every box is a boxful; the tier decides the quality.** All four tiers give 4–5 items. What
+  changes is how many are at the box's own tier — a legendary box guarantees 1–2 genuinely legendary
+  items and fills the rest with mostly rare ones. A single "how many items" number would have forced
+  the rarest box in the game to also be the emptiest.
+- **It builds to the good stuff.** Filler is revealed first, features last, so a box peaks at the end
+  rather than in its opening second.
 
 ## Commands
 
@@ -83,6 +86,7 @@ surface or in cave air pockets. Higher tiers glow.
 /lbe reload            re-read the config and rebuild the catalogue
 /lbe give <tier> [n]   give yourself loot boxes, each separately seeded
 /lbe place <tier>      place a box where you stand
+/lbe loottables        force the configured loot tables to load, report which got a box pool
 ```
 
 `/lbe rarity` is the one that matters. Tuning weights blind is miserable; it prints every term with
@@ -123,13 +127,16 @@ com.micatechnologies.minecraft.lbe
 │   ├── ForgeItemGraph                   # walks Forge's item + recipe registries
 │   └── LootCatalog                      # built once at postInit; rolls boxes
 ├── block/       # BlockLootBox ×4, TileEntityLootBox (the seed)
-├── world/       # LootBoxWorldGen
+├── world/       # LootBoxWorldGen, LootTableInjector (opt-in chest loot)
+├── network/     # LbeNetwork, PacketRevealLoot — presentation only, never authoritative
 ├── command/     # /lbe
 └── client/      # reached ONLY via LbeClientProxy
+    ├── gui/     # GuiLootReveal — the case-opening reel
+    └── render/  # TileEntityLootBoxRenderer — the hovering tier glint
 ```
 
 **The load-bearing constraint:** `rarity` contains no Minecraft types. That keeps the parts most
-likely to be subtly wrong testable on a bare JVM (`./gradlew test` runs 58 tests in seconds), against
+likely to be subtly wrong testable on a bare JVM (`./gradlew test` runs 64 tests in seconds), against
 graphs small enough to read in one screen. Every real modelling bug so far was caught that way — see
 [`docs/README.md`](docs/README.md) for the list.
 
