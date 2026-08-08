@@ -21,4 +21,10 @@ public class LbeCommonProxy implements LbeProxy {
     @Override
     public void postInit(FMLPostInitializationEvent event) {
     }
+
+    @Override
+    public void openRevealGui(com.micatechnologies.minecraft.lbe.rarity.Rarity tier,
+                              java.util.List<net.minecraft.item.ItemStack> contents) {
+        // No screens on a dedicated server.
+    }
 }

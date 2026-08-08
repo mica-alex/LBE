@@ -26,9 +26,26 @@ public class LbeClientProxy extends LbeCommonProxy {
     @Override
     public void preInit(FMLPreInitializationEvent event) {
         super.preInit(event);
+        net.minecraftforge.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
+            com.micatechnologies.minecraft.lbe.block.TileEntityLootBox.class,
+            new com.micatechnologies.minecraft.lbe.client.render.TileEntityLootBoxRenderer());
         // ModelRegistryEvent arrives on the Forge bus in 1.12.2; subscribe this proxy so
         // registerModels below is reached.
         MinecraftForge.EVENT_BUS.register(this);
+    }
+
+    /**
+     * Show the reveal screen.
+     *
+     * <p>Scheduled onto the client thread rather than run inline: this arrives on a netty IO thread,
+     * and swapping the active {@code GuiScreen} from there is a race against the render loop.</p>
+     */
+    @Override
+    public void openRevealGui(com.micatechnologies.minecraft.lbe.rarity.Rarity tier,
+                              java.util.List<net.minecraft.item.ItemStack> contents) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+        mc.addScheduledTask(() -> mc.displayGuiScreen(
+            new com.micatechnologies.minecraft.lbe.client.gui.GuiLootReveal(tier, contents)));
     }
 
     /**

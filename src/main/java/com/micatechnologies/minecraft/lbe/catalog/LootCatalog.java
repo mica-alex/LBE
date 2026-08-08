@@ -165,6 +165,44 @@ public final class LootCatalog {
     }
 
     /**
+     * A handful of arbitrary stacks around {@code tier}, for the reveal screen's spinning reel.
+     *
+     * <p>Purely decorative — these are the items that blur past before the real reward lands, so
+     * they only have to look plausible. Drawn from the box's own tier and the one below it, because a
+     * reel full of dirt while you wait for a legendary undersells the moment, and a reel full of
+     * beacons oversells it.</p>
+     *
+     * <p>Deliberately reads the <b>client's own</b> catalogue rather than shipping decoys in the
+     * packet: they are cosmetic, so a client whose config differs from the server's showing slightly
+     * different blur is not a bug worth paying bandwidth to prevent, on every box, forever.</p>
+     *
+     * @return up to {@code count} stacks; empty if the catalogue is not built
+     */
+    public static List<ItemStack> randomStacks(int count, Rarity tier, Random random) {
+        List<ItemStack> stacks = new ArrayList<>();
+        if (!isReady() || count <= 0) {
+            return stacks;
+        }
+        List<String> pool = new ArrayList<>(table.itemsOf(tier));
+        if (tier != Rarity.lowest()) {
+            pool.addAll(table.itemsOf(Rarity.values()[tier.ordinal() - 1]));
+        }
+        if (pool.isEmpty()) {
+            pool = new ArrayList<>(table.all().keySet());
+        }
+        if (pool.isEmpty()) {
+            return stacks;
+        }
+        for (int i = 0; i < count; i++) {
+            ItemStack stack = graph.stackFor(pool.get(random.nextInt(pool.size())));
+            if (!stack.isEmpty()) {
+                stacks.add(stack);
+            }
+        }
+        return stacks;
+    }
+
+    /**
      * Write the whole scored catalogue to a file — every item, its tier, and its score.
      *
      * <p>Backs {@code /lbe dump}. This is the artefact a pack author actually needs when they think

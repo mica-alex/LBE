@@ -9,4 +9,17 @@ tile.lbe.loot_box_uncommon.name=Uncommon Loot Box
 tile.lbe.loot_box_rare.name=Rare Loot Box
 tile.lbe.loot_box_legendary.name=Legendary Loot Box
 
+# Tier names on their own, for anywhere a tier is named rather than an item.
+# Keyed by Rarity#id(), so these four must stay in step with the enum.
+lbe.tier.common=Common
+lbe.tier.uncommon=Uncommon
+lbe.tier.rare=Rare
+lbe.tier.legendary=Legendary
+
+# The reveal screen
+lbe.reveal.title=%s Loot Box
+lbe.reveal.skip=Click or press any key to skip
+lbe.reveal.close=Click or press any key to close
+lbe.reveal.empty=...and it was empty!
+
 lbe.command.rarity.nothing_held=Hold an item, or name one: /lbe rarity <modid:name[#meta]>

@@ -5,6 +5,7 @@ import com.micatechnologies.minecraft.lbe.block.TileEntityLootBox;
 import com.micatechnologies.minecraft.lbe.catalog.LootCatalog;
 import com.micatechnologies.minecraft.lbe.command.CommandLbe;
 import com.micatechnologies.minecraft.lbe.world.LootBoxWorldGen;
+import com.micatechnologies.minecraft.lbe.world.LootTableInjector;
 import net.minecraft.block.Block;
 import net.minecraft.item.Item;
 import net.minecraft.util.ResourceLocation;
@@ -68,6 +69,8 @@ public class Lbe {
     public void preInit(FMLPreInitializationEvent event) {
         LbeConfig.init(event.getSuggestedConfigurationFile());
         MinecraftForge.EVENT_BUS.register(this);
+        MinecraftForge.EVENT_BUS.register(new LootTableInjector());
+        com.micatechnologies.minecraft.lbe.network.LbeNetwork.init();
         LbeBlocks.init();
         GameRegistry.registerTileEntity(TileEntityLootBox.class,
             new ResourceLocation(LbeConstants.MOD_NAMESPACE, "loot_box"));

@@ -2,18 +2,21 @@ package com.micatechnologies.minecraft.lbe.block;
 
 import com.micatechnologies.minecraft.lbe.LbeConstants;
 import com.micatechnologies.minecraft.lbe.catalog.LootCatalog;
+import com.micatechnologies.minecraft.lbe.network.LbeNetwork;
+import com.micatechnologies.minecraft.lbe.network.PacketRevealLoot;
 import com.micatechnologies.minecraft.lbe.rarity.Rarity;
 import java.util.List;
 import java.util.Random;
-import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumParticleTypes;
 import net.minecraft.util.SoundCategory;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.text.TextComponentString;
 import net.minecraft.world.World;
+import net.minecraft.world.WorldServer;
 
 /**
  * The state behind one loot box: a seed, and whether it has been opened.
@@ -82,40 +85,69 @@ public class TileEntityLootBox extends TileEntity {
 
         List<ItemStack> contents = LootCatalog.roll(tier, new Random(seed()));
 
-        // Removed before the drops are spawned. Doing it the other way round lets an item land in the
-        // block space and immediately be swept up by the block-break drop logic, which has produced
+        // Removed before anything is handed out. The other order lets an item land in the block space
+        // and immediately be swept up by the block-break drop logic, which has produced
         // duplicate-item reports in mods that got this order wrong.
         world.setBlockToAir(pos);
 
+        // PAY FIRST, THEN PERFORM. Every item is in the player's hands before the reveal screen is so
+        // much as told they exist, so skipping the animation, closing it, or dropping connection
+        // halfway through cannot cost anyone a reward. A reveal that gates the payout is a reveal
+        // that eats payouts on disconnect, and no amount of care in the GUI fixes that afterwards.
         for (ItemStack stack : contents) {
-            spawnAt(world, pos, stack);
+            give(player, stack.copy());
         }
 
-        world.playSound(null, pos, net.minecraft.init.SoundEvents.ENTITY_ITEM_PICKUP,
-            SoundCategory.BLOCKS, 0.7F, tier == Rarity.LEGENDARY ? 0.6F : 1.2F);
+        world.playSound(null, pos, net.minecraft.init.SoundEvents.BLOCK_CHEST_OPEN,
+            SoundCategory.BLOCKS, 0.7F, tier == Rarity.LEGENDARY ? 0.7F : 1.1F);
+        spawnOpenParticles(tier);
 
-        if (player != null) {
-            player.sendStatusMessage(new TextComponentString(
-                tier.colourCode() + "Opened a " + tier.id() + " loot box"
-                    + (contents.isEmpty() ? " — and it was empty!" : " (" + contents.size()
-                        + (contents.size() == 1 ? " item)" : " items)"))), true);
+        if (player instanceof EntityPlayerMP) {
+            LbeNetwork.CHANNEL.sendTo(new PacketRevealLoot(tier, contents), (EntityPlayerMP) player);
         }
     }
 
     /**
-     * Drop a stack at the box's position with no pickup delay, so the opener gets it immediately
-     * rather than watching it sit on the floor for the vanilla 10-tick delay.
+     * Put a stack in the player's inventory, dropping whatever will not fit at their feet.
+     *
+     * <p>Into the inventory rather than onto the floor because the reveal screen shows what you
+     * <i>got</i>, and items scattered around your feet while you watch an animation is a good way to
+     * lose a legendary down a ravine. The overflow drop is at the player, not at the box — by the
+     * time it happens the box is gone and the player may already have stepped away.</p>
      */
-    private static void spawnAt(World world, BlockPos pos, ItemStack stack) {
-        EntityItem item = new EntityItem(world,
-            pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D, stack);
-        item.setPickupDelay(0);
-        // A small upward nudge with no horizontal component: contents pop up and settle where the box
-        // was, instead of scattering down whatever slope the box happened to generate on.
-        item.motionX = 0.0D;
-        item.motionY = 0.12D;
-        item.motionZ = 0.0D;
-        world.spawnEntity(item);
+    private static void give(EntityPlayer player, ItemStack stack) {
+        if (player == null) {
+            return;
+        }
+        if (!player.inventory.addItemStackToInventory(stack)) {
+            player.dropItem(stack, false);
+        }
+    }
+
+    /**
+     * A burst of tier-coloured sparks where the box was.
+     *
+     * <p>The opener normally has a full-screen reveal in front of this, so it is mostly for everyone
+     * <i>else</i> — and for the opener the moment they skip the screen. Spawned through
+     * {@code WorldServer} so the particles are sent to every nearby client rather than being created
+     * on a server that has no renderer.</p>
+     */
+    private void spawnOpenParticles(Rarity tier) {
+        if (!(world instanceof WorldServer)) {
+            return;
+        }
+        WorldServer server = (WorldServer) world;
+        int count = 12 + tier.ordinal() * 12;
+        server.spawnParticle(EnumParticleTypes.END_ROD,
+            pos.getX() + 0.5D, pos.getY() + 0.6D, pos.getZ() + 0.5D,
+            count, 0.25D, 0.3D, 0.25D, 0.04D);
+        if (tier.atLeast(Rarity.RARE)) {
+            // Only the top two tiers get the second, showier burst — if every box threw fireworks,
+            // none of them would mean anything.
+            server.spawnParticle(EnumParticleTypes.TOTEM,
+                pos.getX() + 0.5D, pos.getY() + 0.7D, pos.getZ() + 0.5D,
+                count, 0.3D, 0.3D, 0.3D, 0.22D);
+        }
     }
 
     @Override
@@ -144,5 +176,23 @@ public class TileEntityLootBox extends TileEntity {
     public boolean shouldRefresh(World world, BlockPos pos, net.minecraft.block.state.IBlockState oldState,
                                  net.minecraft.block.state.IBlockState newState) {
         return oldState.getBlock() != newState.getBlock();
+    }
+
+    /**
+     * Expand the render box upward to cover the hovering glint.
+     *
+     * <p>The default render bounding box is the block itself, and the glint drawn by
+     * {@code TileEntityLootBoxRenderer} floats well above it — so without this it vanishes the moment
+     * the block's own cube leaves the camera frustum, which happens constantly when you look slightly
+     * up at a box on a ledge.</p>
+     *
+     * <p>Annotated client-only because that is what the annotation means here: the method exists on
+     * {@code TileEntity} for the renderer's benefit and is never called on a server. The
+     * <em>class</em> stays common — a server loads it for the NBT and the roll.</p>
+     */
+    @Override
+    @net.minecraftforge.fml.relauncher.SideOnly(net.minecraftforge.fml.relauncher.Side.CLIENT)
+    public net.minecraft.util.math.AxisAlignedBB getRenderBoundingBox() {
+        return new net.minecraft.util.math.AxisAlignedBB(pos, pos.add(1, 3, 1));
     }
 }

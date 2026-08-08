@@ -85,6 +85,57 @@ public final class LbeConfig {
      */
     public static boolean worldGenUnderground = true;
 
+    /**
+     * Whether to add loot boxes to chest loot tables (dungeons, villages, temples and so on).
+     *
+     * <p><b>Off by default, deliberately.</b> Natural generation already puts boxes in the world, and
+     * a pack author who has balanced their dungeon loot did not ask a newly installed mod to start
+     * editing it. Boxes are <i>added</i> to a table, never replacing what is already there.</p>
+     */
+    public static boolean injectIntoLootTables = false;
+
+    /**
+     * Loot tables to add boxes to when {@link #injectIntoLootTables} is on.
+     *
+     * <p>An entry ending in {@code /} matches by prefix, so {@code minecraft:chests/} covers every
+     * vanilla chest table at once. Anything else must match a table name exactly.</p>
+     */
+    public static String[] lootTableTargets = {
+        "# Loot tables to add boxes to. An entry ending in '/' matches by PREFIX, so",
+        "# 'minecraft:chests/' covers every vanilla chest table at once. Anything else must match",
+        "# a table name EXACTLY -- otherwise naming jungle_temple would also hit the",
+        "# jungle_temple_dispenser arrow trap, which is not what anyone means.",
+        "# Only consulted when injectIntoLootTables is true.",
+        "minecraft:chests/simple_dungeon",
+        "minecraft:chests/abandoned_mineshaft",
+        "minecraft:chests/desert_pyramid",
+        "minecraft:chests/jungle_temple",
+        "minecraft:chests/stronghold_corridor",
+        "minecraft:chests/stronghold_crossing",
+        "minecraft:chests/stronghold_library",
+        "minecraft:chests/village_blacksmith",
+        "minecraft:chests/nether_bridge",
+        "minecraft:chests/igloo_chest",
+        "minecraft:chests/woodland_mansion",
+        "minecraft:chests/end_city_treasure",
+    };
+
+    /**
+     * Relative weight of "no box" in the injected pool. Higher means boxes turn up in fewer chests.
+     *
+     * <p>At the defaults a matching chest has roughly a one-in-six chance of containing any box.</p>
+     */
+    public static int lootTableEmptyWeight = 100;
+
+    /**
+     * Relative weight of each tier in the injected pool, indexed by {@link Rarity#ordinal()}.
+     *
+     * <p>Steeper than the world-generation rates on purpose: a chest is already a reward, so finding
+     * a legendary box inside one should be rarer than stumbling over one in a cave, not commoner.
+     * A weight of 0 keeps that tier out of chests entirely.</p>
+     */
+    public static int[] lootTableTierWeights = { 12, 6, 2, 1 };
+
     // --- rarity: the scoring model ----------------------------------------------------------------
 
     /** @see RarityWeights#rawMaterialBase */
@@ -331,6 +382,28 @@ public final class LbeConfig {
         worldGenUnderground = config.getBoolean("allowUnderground", CATEGORY_WORLDGEN,
             worldGenUnderground,
             "Whether boxes may generate in cave air pockets as well as on the surface.");
+        injectIntoLootTables = config.getBoolean("injectIntoLootTables", CATEGORY_WORLDGEN,
+            injectIntoLootTables,
+            "Whether to ADD loot boxes to chest loot tables (dungeons, villages, temples...).\n"
+                + "Off by default: natural generation already places boxes, and a pack that has "
+                + "balanced its dungeon loot did not ask a newly installed mod to edit it. Nothing "
+                + "already in a table is ever replaced or removed — a new pool is appended.");
+        lootTableTargets = config.getStringList("lootTableTargets", CATEGORY_WORLDGEN,
+            lootTableTargets,
+            "Which loot tables to add boxes to. An entry ending in '/' matches by PREFIX, so "
+                + "'minecraft:chests/' covers every vanilla chest table at once; anything else must "
+                + "match a table name exactly. Only used when injectIntoLootTables is true.");
+        lootTableEmptyWeight = config.getInt("lootTableEmptyWeight", CATEGORY_WORLDGEN,
+            lootTableEmptyWeight, 1, 100000,
+            "Relative weight of 'no box' in the injected pool. Higher = boxes in fewer chests. At "
+                + "the defaults a matching chest has roughly a 1 in 6 chance of holding any box.");
+        lootTableTierWeights = config.get(CATEGORY_WORLDGEN, "lootTableTierWeights",
+            lootTableTierWeights,
+            "Relative weight of each tier within the injected pool, in order: " + tierOrderComment()
+                + ". Steeper than the world-gen rates on purpose — a chest is already a reward, so a "
+                + "legendary box in one should be rarer than one found in a cave. 0 keeps that tier "
+                + "out of chests entirely.")
+            .getIntList();
 
         config.addCustomCategoryComment(CATEGORY_RARITY,
             "The automatic scoring model.\n"
@@ -502,6 +575,41 @@ public final class LbeConfig {
             return 0.0D;
         }
         return spawnChancePerChunk[index];
+    }
+
+    /**
+     * Whether {@code tableName} is one of the tables boxes should be added to.
+     *
+     * <p><b>An entry ending in {@code /} is a prefix; anything else must match exactly.</b> Treating
+     * every entry as a prefix looks equivalent and is not: {@code minecraft:chests/jungle_temple}
+     * is a prefix of {@code minecraft:chests/jungle_temple_dispenser}, so listing the temple's chest
+     * silently added loot boxes to the temple's <i>arrow trap</i> as well. Every table whose name
+     * happens to extend another one has the same problem, and a pack author naming one table has
+     * plainly not consented to its neighbours.</p>
+     *
+     * <p>Comment and blank lines are skipped, so the config's inline documentation cannot
+     * accidentally become a target.</p>
+     */
+    public static boolean injectsInto(String tableName) {
+        if (lootTableTargets == null || tableName == null) {
+            return false;
+        }
+        for (String target : lootTableTargets) {
+            if (target == null) {
+                continue;
+            }
+            String trimmed = target.trim();
+            if (trimmed.isEmpty() || trimmed.charAt(0) == '#') {
+                continue;
+            }
+            boolean matched = trimmed.endsWith("/")
+                ? tableName.startsWith(trimmed)
+                : tableName.equals(trimmed);
+            if (matched) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Whether boxes may generate in {@code dimensionId}. */
