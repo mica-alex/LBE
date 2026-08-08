@@ -17,16 +17,16 @@ package com.micatechnologies.minecraft.lbe.rarity;
 public enum Rarity {
 
     /** Bulk materials and the first rung of any progression: cobble, wheat, leather, coal. */
-    COMMON("common", "§f"),
+    COMMON("common", "§f", 0xE0E0E0),
 
     /** Iron-tier gear, redstone components, the entry machines of most tech mods. */
-    UNCOMMON("uncommon", "§a"),
+    UNCOMMON("uncommon", "§a", 0x7BE86C),
 
     /** Diamond-tier gear, enchanted books, mid-progression modded machinery. */
-    RARE("rare", "§b"),
+    RARE("rare", "§b", 0x7ADCF0),
 
     /** The top of a pack's progression: beacons, end-game modded components, dragon eggs. */
-    LEGENDARY("legendary", "§6");
+    LEGENDARY("legendary", "§6", 0xFFD554);
 
     /** Lowercase, stable identifier. Used in registry names, lang keys, config keys and commands. */
     private final String id;
@@ -34,9 +34,13 @@ public enum Rarity {
     /** Vanilla formatting code used when this tier's name is shown to a player. */
     private final String colourCode;
 
-    Rarity(String id, String colourCode) {
+    /** Packed {@code 0xRRGGBB} for this tier. */
+    private final int rgb;
+
+    Rarity(String id, String colourCode, int rgb) {
         this.id = id;
         this.colourCode = colourCode;
+        this.rgb = rgb;
     }
 
     public String id() {
@@ -45,6 +49,37 @@ public enum Rarity {
 
     public String colourCode() {
         return colourCode;
+    }
+
+    /**
+     * The tier's colour as packed {@code 0xRRGGBB}, for anything that tints or draws rather than
+     * printing text.
+     *
+     * <p>Here rather than in a client class for the same reason {@link #colourCode()} is: it is a
+     * display <i>datum</i>, not display <i>code</i>, and keeping the two together is what stops the
+     * chat colour and the rendered colour drifting apart. It carries no Minecraft types, so the
+     * package stays testable.</p>
+     *
+     * <p>These values match the palette in {@code tools/gen_box_textures.py}. Change one, change
+     * both, or a box's gem will disagree with the glint hovering over it.</p>
+     */
+    public int rgb() {
+        return rgb;
+    }
+
+    /** Red channel, {@code 0}–{@code 1}, for {@code GlStateManager.color}. */
+    public float red() {
+        return ((rgb >> 16) & 0xFF) / 255.0F;
+    }
+
+    /** Green channel, {@code 0}–{@code 1}. */
+    public float green() {
+        return ((rgb >> 8) & 0xFF) / 255.0F;
+    }
+
+    /** Blue channel, {@code 0}–{@code 1}. */
+    public float blue() {
+        return (rgb & 0xFF) / 255.0F;
     }
 
     /** {@code true} if this tier is at least as valuable as {@code other}. */
