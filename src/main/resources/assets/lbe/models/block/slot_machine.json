@@ -1,5 +1,5 @@
 {
-  "__comment": "The cabinet is slightly narrower than a full block so a row of machines reads as separate units rather than a wall. Both halves share this model; the blockstate swaps the textures.",
+  "__comment": "Slightly narrower than a full block so a row of machines reads as separate cabinets. No cullface anywhere: this is not a full cube, so claiming a face is flush with the block boundary would let neighbours cull faces that are actually visible.",
   "parent": "block/block",
   "textures": {
     "particle": "#front"
@@ -9,7 +9,7 @@
       "from": [1, 0, 1],
       "to": [15, 16, 15],
       "faces": {
-        "north": { "texture": "#front", "cullface": "north" },
+        "north": { "texture": "#front" },
         "south": { "texture": "#side" },
         "west":  { "texture": "#side" },
         "east":  { "texture": "#side" },

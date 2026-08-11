@@ -55,6 +55,14 @@ public class GuiSlotMachine extends GuiScreen {
     private double bet;
     private double balance = PacketSlotResult.UNKNOWN_BALANCE;
 
+    /**
+     * The balance the server reported for a spin still being animated.
+     *
+     * <p>Held back until the reels stop. See {@link #accept} — showing it on arrival gives the
+     * result away roughly two seconds early.
+     */
+    private double pendingBalance = PacketSlotResult.UNKNOWN_BALANCE;
+
     /** Null until the server answers; then the reels are steered onto it. */
     @Nullable
     private SlotSpin pending;
@@ -102,12 +110,18 @@ public class GuiSlotMachine extends GuiScreen {
 
     /** A result, or an opening balance, arrived. Called on the client thread. */
     public void accept(PacketSlotResult message) {
-        balance = message.balance();
         if (message.spin() == null) {
+            // An opening balance, with no result attached. Nothing to spoil.
+            balance = message.balance();
             return;
         }
         pending = message.spin();
         lastPayout = message.payout();
+        // The new balance is deliberately NOT shown yet. The server settles the bet and answers
+        // within a tick or so, while the reels keep turning for another two seconds — so applying
+        // it here would show the player their winnings before the reels revealed them, and give
+        // away every single spin about two seconds early. It lands in settle(), with the reels.
+        pendingBalance = message.balance();
         if (!spinning) {
             // The server answered before the animation started — land it immediately rather than
             // showing a spin the player never asked to watch.
@@ -201,6 +215,12 @@ public class GuiSlotMachine extends GuiScreen {
             // The server never answered — a rejected bet, a dropped packet, a disconnect. Stop
             // spinning rather than turning forever; the reason was sent to chat.
             spinning = false;
+            if (pendingBalance != PacketSlotResult.UNKNOWN_BALANCE) {
+                // A result did arrive but never got animated. Show its balance rather than
+                // leaving a stale figure on screen for a bet that really was settled.
+                balance = pendingBalance;
+                pendingBalance = PacketSlotResult.UNKNOWN_BALANCE;
+            }
         }
     }
 
@@ -214,6 +234,9 @@ public class GuiSlotMachine extends GuiScreen {
         lastResult = pending;
         pending = null;
         spinning = false;
+        // Now, with the reels. The money moved seconds ago; this is when the player learns of it.
+        balance = pendingBalance;
+        pendingBalance = PacketSlotResult.UNKNOWN_BALANCE;
     }
 
     // ---------------------------------------------------------------------------------------------

@@ -1,14 +1,16 @@
 {
+  "__comment": "forge_marker 1: the 'top' and 'facing' variant sets below are combined into every pairing, so eight states come from six lines. The model MUST be lbe:slot_machine and not vanilla 'cube' — cube wants textures named up/down/north/south/east/west, and naming ours front/side/top/bottom against it resolves to nothing and renders the missing-model cube.",
   "forge_marker": 1,
   "defaults": {
+    "model": "lbe:slot_machine",
     "textures": {
       "top": "lbe:blocks/slot_machine_top",
       "bottom": "lbe:blocks/slot_machine_bottom",
       "side": "lbe:blocks/slot_machine_lower_side",
       "front": "lbe:blocks/slot_machine_lower_front"
     },
-    "model": "cube",
-    "uvlock": true
+    "__comment": "uvlock false: the cabinet has a distinct front, which must rotate with the model rather than having its UVs pinned to world axes.",
+    "uvlock": false
   },
   "variants": {
     "top": {
