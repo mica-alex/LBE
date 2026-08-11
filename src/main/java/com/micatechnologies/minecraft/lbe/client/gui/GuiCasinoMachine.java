@@ -9,6 +9,7 @@ import com.micatechnologies.minecraft.lbe.casino.cards.Card;
 import com.micatechnologies.minecraft.lbe.casino.coinflip.CoinFlipGame;
 import com.micatechnologies.minecraft.lbe.casino.highlow.HighLowGame;
 import com.micatechnologies.minecraft.lbe.casino.keno.KenoGame;
+import com.micatechnologies.minecraft.lbe.casino.mines.MinesGame;
 import com.micatechnologies.minecraft.lbe.casino.plinko.PlinkoGame;
 import com.micatechnologies.minecraft.lbe.casino.roulette.RouletteGame;
 import com.micatechnologies.minecraft.lbe.casino.slots.SlotPaytable;
@@ -103,6 +104,12 @@ public class GuiCasinoMachine extends GuiScreen {
      * game selects a single option, and this one toggles five independently.
      */
     private int heldMask;
+
+    /** Mines only: how many mines the next round will hide. */
+    private int mineCount = 3;
+
+    /** Mines only: which tiles are turned over in the round being played. */
+    private final SortedSet<Integer> revealedTiles = new TreeSet<>();
 
     /** Set while a two-step game has money down and is waiting for the player's second choice. */
     private boolean awaitingChoice;
@@ -247,7 +254,7 @@ public class GuiCasinoMachine extends GuiScreen {
             // High-low grows a row of buttons the moment a card is dealt. Reserving the space up
             // front costs one empty strip and avoids the whole window resizing and re-centring
             // itself under the player's cursor mid-hand.
-            return game.isTwoStep() ? 1 : 0;
+            return game.takesStakeUpFront() ? 1 : 0;
         }
         return (options.size() + optionColumns - 1) / optionColumns;
     }
@@ -265,6 +272,9 @@ public class GuiCasinoMachine extends GuiScreen {
                 return 60;
             case VIDEO_POKER:
                 return 40;
+            case MINES:
+                // Four rows of six, plus a little under them.
+                return (MinesGame.GRID_SIZE / 6) * 18 + 4;
             case PLINKO:
                 return 46;
             case KENO:
@@ -313,6 +323,18 @@ public class GuiCasinoMachine extends GuiScreen {
                     options.add(new Option(risk.name().charAt(0)
                         + risk.name().substring(1).toLowerCase(Locale.ROOT),
                         risk.ordinal(), 0));
+                }
+                break;
+            case MINES:
+                if (awaitingChoice) {
+                    // Mid-round the only decision that is not a tile is "stop".
+                    options.add(new Option("Cash out", 0, 0));
+                } else {
+                    // Before betting, how dangerous the board should be.
+                    for (int count : new int[] {1, 3, 5, 10}) {
+                        options.add(new Option(count + " mine" + (count == 1 ? "" : "s"),
+                            count, 0));
+                    }
                 }
                 break;
             case VIDEO_POKER:
@@ -366,6 +388,14 @@ public class GuiCasinoMachine extends GuiScreen {
                 awaitingChoice = true;
                 animating = false;
                 selectedOption = 0;
+                if (message.game() == CasinoGame.MINES) {
+                    // The server sends the whole revealed set each time, so this stays correct even
+                    // if a packet is lost — no incremental state to drift.
+                    revealedTiles.clear();
+                    for (int tile : message.reveal()) {
+                        revealedTiles.add(tile);
+                    }
+                }
                 initGui();
                 return;
             case SETTLED:
@@ -385,6 +415,41 @@ public class GuiCasinoMachine extends GuiScreen {
     // Input
     // ---------------------------------------------------------------------------------------------
 
+    /**
+     * Mines' board is clicked directly rather than through buttons.
+     *
+     * <p>Twenty-four vanilla {@code GuiButton}s would work and would look like a spreadsheet; a grid
+     * drawn and hit-tested here is both nicer and less code. Everything else about the move is
+     * unchanged — the click sends a tile number and the server decides what is under it.
+     */
+    @Override
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws IOException {
+        super.mouseClicked(mouseX, mouseY, button);
+        if (game != CasinoGame.MINES || !awaitingChoice || animating) {
+            return;
+        }
+        int tile = tileAt(mouseX, mouseY);
+        if (tile >= 0 && !revealedTiles.contains(tile)) {
+            LbeNetwork.CHANNEL.sendToServer(new PacketCasinoPlay(pos, 0.0, tile, 0, null));
+        }
+    }
+
+    /** Which mines tile is under the cursor, or -1. Mirrors the layout in {@link #drawMines}. */
+    private int tileAt(int mouseX, int mouseY) {
+        int cell = 18;
+        int columns = 6;
+        int rows = MinesGame.GRID_SIZE / columns;
+        int boardLeft = width / 2 - (columns * cell) / 2;
+        int boardTop = (height - panelHeight) / 2 + 24;
+        int column = (mouseX - boardLeft) / cell;
+        int row = (mouseY - boardTop) / cell;
+        if (mouseX < boardLeft || mouseY < boardTop || column < 0 || column >= columns
+                || row < 0 || row >= rows) {
+            return -1;
+        }
+        return row * columns + column;
+    }
+
     @Override
     protected void actionPerformed(GuiButton button) throws IOException {
         if (button.id == ID_PLAY) {
@@ -403,6 +468,18 @@ public class GuiCasinoMachine extends GuiScreen {
     private void chooseOption(int index) {
         if (index < 0 || index >= options.size()) {
             return;
+        }
+        if (game == CasinoGame.MINES && awaitingChoice) {
+            // The only option mid-round is Cash out; the tiles are clicked on the board itself.
+            LbeNetwork.CHANNEL.sendToServer(new PacketCasinoPlay(pos, 0.0, 0,
+                TileEntityCasinoMachine.MINES_CASH_OUT, null));
+            awaitingChoice = false;
+            animating = true;
+            animationTicks = 0;
+            return;
+        }
+        if (game == CasinoGame.MINES) {
+            mineCount = options.get(index).valueA;
         }
         if (game == CasinoGame.VIDEO_POKER && awaitingChoice) {
             // Holds toggle independently; there is no "selected" card. The draw happens when the
@@ -454,6 +531,7 @@ public class GuiCasinoMachine extends GuiScreen {
         pending = null;
         settled = null;
         heldMask = 0;
+        revealedTiles.clear();
         animating = true;
         animationTicks = 0;
         status = "";
@@ -465,6 +543,9 @@ public class GuiCasinoMachine extends GuiScreen {
             ? null : options.get(selectedOption);
         int optionA = option == null ? 0 : option.valueA;
         int optionB = option == null ? 0 : option.valueB;
+        if (game == CasinoGame.MINES) {
+            optionA = mineCount;   // the board's danger, not a menu index
+        }
         lastCallLabel = option == null ? "" : option.label;
         int[] numbers = new int[picks.size()];
         int i = 0;
@@ -532,7 +613,7 @@ public class GuiCasinoMachine extends GuiScreen {
         // Now, with the reveal. The money moved seconds ago; this is when the player learns of it.
         balance = pendingBalance;
         pendingBalance = PacketCasinoResult.UNKNOWN_BALANCE;
-        if (game.isTwoStep()) {
+        if (game.takesStakeUpFront()) {
             initGui();   // drop the mid-hand buttons until another hand is dealt
         }
     }
@@ -604,6 +685,9 @@ public class GuiCasinoMachine extends GuiScreen {
                 break;
             case PLINKO:
                 drawPlinko(centre, top);
+                break;
+            case MINES:
+                drawMines(top);
                 break;
             case VIDEO_POKER:
                 drawVideoPoker(centre, top);
@@ -701,6 +785,40 @@ public class GuiCasinoMachine extends GuiScreen {
             // The ball, falling: cosmetic, and it lands wherever the server said.
             int row = Math.min(PlinkoGame.ROWS, animationTicks * PlinkoGame.ROWS / ANIMATION_TICKS);
             drawCenteredString(fontRenderer, "o", centre, top + row * 2, 0xFFFFFF);
+        }
+    }
+
+    /**
+     * The board: twenty-four tiles, six across.
+     *
+     * <p>Turned tiles are green, and once the round is over the mines are shown in red — but not one
+     * moment before. Mid-round the client is never told where they are, because a client that knows
+     * is a client that can play perfectly.
+     */
+    private void drawMines(int top) {
+        int cell = 18;
+        int columns = 6;
+        int boardLeft = width / 2 - (columns * cell) / 2;
+        boolean over = settled != null && !animating
+            && settled.stage() == PacketCasinoResult.Stage.SETTLED;
+        SortedSet<Integer> mines = new TreeSet<>();
+        if (over) {
+            for (int value : settled.reveal()) {
+                mines.add(value);
+            }
+        }
+        for (int tile = 0; tile < MinesGame.GRID_SIZE; tile++) {
+            int x = boardLeft + (tile % columns) * cell;
+            int y = top + (tile / columns) * cell;
+            boolean turned = revealedTiles.contains(tile);
+            boolean mine = over && mines.contains(tile);
+            int colour = mine ? 0xFFD83A3A : turned ? 0xFF2E7A3A : 0xFF241A30;
+            drawRect(x + 1, y + 1, x + cell - 1, y + cell - 1, colour);
+            if (mine) {
+                drawCenteredString(fontRenderer, "X", x + cell / 2, y + 5, 0x201010);
+            } else if (turned) {
+                drawCenteredString(fontRenderer, "*", x + cell / 2, y + 5, 0xD0FFD0);
+            }
         }
     }
 
@@ -839,6 +957,10 @@ public class GuiCasinoMachine extends GuiScreen {
                 // The only game here whose return depends on how well it is played, so stating one
                 // number would be a lie in either direction.
                 return "Returns up to 99.5% — with perfect play";
+            case MINES:
+                // Exactly the same at every stopping point, which is the nice thing about it.
+                rtp = 1.0 - MinesGame.HOUSE_EDGE;
+                break;
             default:
                 return "";
         }

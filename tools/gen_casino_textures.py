@@ -44,6 +44,7 @@ MACHINES = {
     "keno_machine":     (True,  (0x40, 0x24, 0x50), (0x2C, 0x18, 0x38), "grid"),
     "baccarat_table":   (False, (0x1E, 0x44, 0x2E), (0x14, 0x2E, 0x1F), "baccarat"),
     "video_poker_machine": (True, (0x28, 0x30, 0x4E), (0x18, 0x1E, 0x34), "poker"),
+    "mines_machine":    (True,  (0x4A, 0x2A, 0x22), (0x30, 0x1A, 0x14), "mine"),
 }
 
 
@@ -179,7 +180,19 @@ def motif_poker(rows):
         rows[6 + (i % 2)][x] = RED if i % 2 == 0 else BLACK
 
 
+def motif_mine(rows):
+    """A tile grid with one very obvious mine in it."""
+    for row in range(3):
+        for column in range(3):
+            x = 3 + column * 4
+            y = 4 + row * 3
+            box(rows, x, y, x + 2, y + 1, FELT_LINE if (row + column) % 2 else WHITE)
+    box(rows, 7, 7, 9, 8, BLACK)
+    rows[7][8] = RED
+
+
 MOTIFS = {
+    "mine": motif_mine,
     "poker": motif_poker,
     "baccarat": motif_baccarat,
     "coin": motif_coin,

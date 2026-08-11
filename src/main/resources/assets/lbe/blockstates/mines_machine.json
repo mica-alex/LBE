@@ -1,0 +1,43 @@
+{
+  "forge_marker": 1,
+  "defaults": {
+    "model": "lbe:mines_machine",
+    "textures": {
+      "top": "lbe:blocks/mines_machine_top",
+      "bottom": "lbe:blocks/mines_machine_bottom",
+      "side": "lbe:blocks/mines_machine_side",
+      "front": "lbe:blocks/mines_machine_front"
+    },
+    "uvlock": false
+  },
+  "variants": {
+    "top": {
+      "false": {
+        "textures": {
+          "side": "lbe:blocks/mines_machine_side",
+          "front": "lbe:blocks/mines_machine_front"
+        }
+      },
+      "true": {
+        "textures": {
+          "side": "lbe:blocks/mines_machine_upper_side",
+          "front": "lbe:blocks/mines_machine_upper_front"
+        }
+      }
+    },
+    "facing": {
+      "north": {
+        "y": 0
+      },
+      "south": {
+        "y": 180
+      },
+      "west": {
+        "y": 270
+      },
+      "east": {
+        "y": 90
+      }
+    }
+  }
+}

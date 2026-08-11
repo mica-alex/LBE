@@ -23,7 +23,8 @@ public enum CasinoGame {
     PLINKO("plinko_machine", "Plinko", Cabinet.TALL),
     KENO("keno_machine", "Keno", Cabinet.TALL),
     BACCARAT("baccarat_table", "Baccarat", Cabinet.TABLE),
-    VIDEO_POKER("video_poker_machine", "Video Poker", Cabinet.TALL);
+    VIDEO_POKER("video_poker_machine", "Video Poker", Cabinet.TALL),
+    MINES("mines_machine", "Mines", Cabinet.TALL);
 
     /** What shape of block the game sits in. */
     public enum Cabinet {
@@ -63,14 +64,20 @@ public enum CasinoGame {
     }
 
     /**
-     * Whether the stake is taken before the player's real decision, so the game runs in two steps.
+     * Whether the stake is taken before the player's real decisions, so a round has a middle.
      *
-     * <p>High-low deals a card and then asks which way; video poker deals five and then asks which
-     * to keep. Both take the money up front, which means a hand in progress is money in the air —
-     * see {@code TileEntityCasinoMachine}'s note on why that state is not written to disk.
+     * <p>High-low deals a card and then asks which way; video poker deals five and asks which to
+     * keep; mines takes the bet and then asks, over and over, whether to turn another tile. All
+     * three mean a round in progress is money in the air — see {@code TileEntityCasinoMachine}'s
+     * note on why that state is deliberately not written to disk.
      */
-    public boolean isTwoStep() {
-        return this == HIGH_LOW || this == VIDEO_POKER;
+    public boolean takesStakeUpFront() {
+        return this == HIGH_LOW || this == VIDEO_POKER || this == MINES;
+    }
+
+    /** Whether a round can run for an unbounded number of choices. Mines, so far. */
+    public boolean isOpenEnded() {
+        return this == MINES;
     }
 
     /** Texture prefix for this game's cabinet, e.g. {@code blocks/slot_machine}. */

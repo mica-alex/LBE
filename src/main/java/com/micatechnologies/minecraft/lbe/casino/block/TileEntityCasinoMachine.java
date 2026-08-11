@@ -11,6 +11,7 @@ import com.micatechnologies.minecraft.lbe.casino.economy.LbeEconomy;
 import com.micatechnologies.minecraft.lbe.casino.economy.Wager;
 import com.micatechnologies.minecraft.lbe.casino.highlow.HighLowGame;
 import com.micatechnologies.minecraft.lbe.casino.keno.KenoGame;
+import com.micatechnologies.minecraft.lbe.casino.mines.MinesGame;
 import com.micatechnologies.minecraft.lbe.casino.plinko.PlinkoGame;
 import com.micatechnologies.minecraft.lbe.casino.roulette.RouletteGame;
 import com.micatechnologies.minecraft.lbe.casino.slots.SlotSpin;
@@ -79,14 +80,17 @@ public class TileEntityCasinoMachine extends TileEntity {
         final CasinoGame kind;
         @Nullable final HighLowGame highLow;
         @Nullable final VideoPokerGame videoPoker;
+        @Nullable final MinesGame mines;
         final Wager wager;
         final double bet;
 
         OpenHand(CasinoGame kind, @Nullable HighLowGame highLow,
-                 @Nullable VideoPokerGame videoPoker, Wager wager, double bet) {
+                 @Nullable VideoPokerGame videoPoker, @Nullable MinesGame mines,
+                 Wager wager, double bet) {
             this.kind = kind;
             this.highLow = highLow;
             this.videoPoker = videoPoker;
+            this.mines = mines;
             this.wager = wager;
             this.bet = bet;
         }
@@ -137,8 +141,8 @@ public class TileEntityCasinoMachine extends TileEntity {
 
         // A two-step game's second half settles a hand that is already paid for, so it must run
         // before any of the bet checks below — there is no new bet to check.
-        if (game.isTwoStep() && openHands.containsKey(player.getUniqueID())) {
-            resolveOpenHand(player, optionA);
+        if (game.takesStakeUpFront() && openHands.containsKey(player.getUniqueID())) {
+            continueOpenHand(player, optionA, optionB);
             return;
         }
 
@@ -171,8 +175,8 @@ public class TileEntityCasinoMachine extends TileEntity {
         markPlayed(player);
 
         // Past this point the money is held and MUST be settled on every path.
-        if (game.isTwoStep()) {
-            deal(player, game, wager, rounded);
+        if (game.takesStakeUpFront()) {
+            deal(player, game, optionA, wager, rounded);
             return;
         }
 
@@ -237,6 +241,9 @@ public class TileEntityCasinoMachine extends TileEntity {
             case BACCARAT:
                 return BaccaratGame.sideFor(optionA) != null ? null
                     : "Back the player, the banker, or a tie.";
+            case MINES:
+                // Clamped by the game rather than refused, so a nonsense count still gives a board.
+                return null;
             case KENO:
                 return KenoGame.isValid(toPicks(numbers)) ? null
                     : "Pick between 1 and " + KenoGame.MAX_PICKS + " numbers from 1 to "
@@ -305,6 +312,12 @@ public class TileEntityCasinoMachine extends TileEntity {
                 reveal[path.length] = drop.slot();
                 return reveal;
             }
+            case MINES: {
+                MinesGame.Result round = (MinesGame.Result) result;
+                // Where the mines were. Only ever sent once the round is over — mid-round this
+                // would be the entire game, handed to the client that must not know it.
+                return toIntArray(round.mines());
+            }
             case VIDEO_POKER: {
                 VideoPokerGame.Result hand = (VideoPokerGame.Result) result;
                 int[] reveal = new int[VideoPokerGame.HAND_SIZE];
@@ -355,18 +368,27 @@ public class TileEntityCasinoMachine extends TileEntity {
     // High-low's two steps
     // ---------------------------------------------------------------------------------------------
 
-    /** Step one: the stake is taken and something is dealt. Nothing is decided yet. */
-    private void deal(EntityPlayerMP player, CasinoGame game, Wager wager, double bet) {
+    /** Step one: the stake is taken and the round begins. Nothing is decided yet. */
+    private void deal(EntityPlayerMP player, CasinoGame game, int optionA, Wager wager,
+                      double bet) {
+        if (game == CasinoGame.MINES) {
+            MinesGame board = new MinesGame(optionA, random);
+            openHands.put(player.getUniqueID(),
+                new OpenHand(game, null, null, board, wager, bet));
+            LbeNetwork.CHANNEL.sendTo(PacketCasinoResult.dealt(game, balanceOf(player),
+                new int[0], board.mineCount() + " mines. Turn a tile."), player);
+            return;
+        }
         if (game == CasinoGame.HIGH_LOW) {
             HighLowGame hand = new HighLowGame(random);
-            openHands.put(player.getUniqueID(), new OpenHand(game, hand, null, wager, bet));
+            openHands.put(player.getUniqueID(), new OpenHand(game, hand, null, null, wager, bet));
             Card base = hand.base();
             LbeNetwork.CHANNEL.sendTo(PacketCasinoResult.dealt(game, balanceOf(player),
                 new int[] {cardId(base)}, "Higher or lower than " + base + "?"), player);
             return;
         }
         VideoPokerGame poker = new VideoPokerGame(random);
-        openHands.put(player.getUniqueID(), new OpenHand(game, null, poker, wager, bet));
+        openHands.put(player.getUniqueID(), new OpenHand(game, null, poker, null, wager, bet));
         int[] reveal = new int[VideoPokerGame.HAND_SIZE];
         for (int i = 0; i < reveal.length; i++) {
             reveal[i] = cardId(poker.hand().get(i));
@@ -375,10 +397,19 @@ public class TileEntityCasinoMachine extends TileEntity {
             "Hold what you want, then draw."), player);
     }
 
-    /** Step two: the player's choice settles the hand that is already paid for. */
-    private void resolveOpenHand(EntityPlayerMP player, int optionA) {
+    /**
+     * A move in a round that is already paid for.
+     *
+     * <p>Most games settle here. Mines may not: turning a safe tile leaves the round open, so the
+     * hand goes back into the map and the player is sent the new multiplier instead of a result.
+     */
+    private void continueOpenHand(EntityPlayerMP player, int optionA, int optionB) {
         OpenHand open = openHands.remove(player.getUniqueID());
         if (open == null) {
+            return;
+        }
+        if (open.kind == CasinoGame.MINES) {
+            continueMines(player, open, optionA, optionB);
             return;
         }
         GameResult result;
@@ -397,6 +428,38 @@ public class TileEntityCasinoMachine extends TileEntity {
             return;   // already refunded and explained
         }
         settle(player, open.kind, open.wager, result, open.bet);
+    }
+
+    /**
+     * One move in a mines round: turn a tile, or stop and take the multiplier.
+     *
+     * <p>The only place a round can survive a move. Everything else about the money is unchanged —
+     * the stake is still held, and it is still settled exactly once, just possibly several packets
+     * later than it was taken.
+     */
+    private void continueMines(EntityPlayerMP player, OpenHand open, int tile, int command) {
+        MinesGame board = open.mines;
+        MinesGame.Result result;
+        try {
+            result = command == MINES_CASH_OUT && !board.revealed().isEmpty()
+                ? board.cashOut() : board.reveal(tile);
+        } catch (RuntimeException e) {
+            Lbe.LOGGER.error("[casino] A mines round failed; refunding it.", e);
+            open.wager.cancel();
+            reject(player, "The machine jammed. Your bet has been returned.");
+            return;
+        }
+        if (result == null) {
+            // Still going: put the round back and tell the player what it is worth now.
+            openHands.put(player.getUniqueID(), open);
+            int[] reveal = toIntArray(board.revealed());
+            LbeNetwork.CHANNEL.sendTo(PacketCasinoResult.dealt(CasinoGame.MINES,
+                balanceOf(player), reveal, String.format(java.util.Locale.ROOT,
+                    "%.2fx — next tile pays %.2fx", board.currentMultiplier(),
+                    board.nextMultiplier())), player);
+            return;
+        }
+        settle(player, CasinoGame.MINES, open.wager, result, open.bet);
     }
 
     /**
@@ -422,6 +485,18 @@ public class TileEntityCasinoMachine extends TileEntity {
      * already carries an int and a hostile client can do no more damage with a wrong bit than
      * discard a card it meant to keep — its own money, its own mistake.
      */
+    /** The option-B command meaning "stop and take the multiplier" in a mines round. */
+    public static final int MINES_CASH_OUT = 1;
+
+    private static int[] toIntArray(java.util.Collection<Integer> values) {
+        int[] array = new int[values.size()];
+        int i = 0;
+        for (int value : values) {
+            array[i++] = value;
+        }
+        return array;
+    }
+
     private static boolean[] holdsFrom(int mask) {
         boolean[] holds = new boolean[VideoPokerGame.HAND_SIZE];
         for (int i = 0; i < holds.length; i++) {
