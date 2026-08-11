@@ -1,0 +1,35 @@
+{
+  "forge_marker": 1,
+  "defaults": {
+    "textures": {
+      "top": "lbe:blocks/slot_machine_top",
+      "bottom": "lbe:blocks/slot_machine_bottom",
+      "side": "lbe:blocks/slot_machine_lower_side",
+      "front": "lbe:blocks/slot_machine_lower_front"
+    },
+    "model": "cube",
+    "uvlock": true
+  },
+  "variants": {
+    "top": {
+      "false": {
+        "textures": {
+          "side": "lbe:blocks/slot_machine_lower_side",
+          "front": "lbe:blocks/slot_machine_lower_front"
+        }
+      },
+      "true": {
+        "textures": {
+          "side": "lbe:blocks/slot_machine_upper_side",
+          "front": "lbe:blocks/slot_machine_upper_front"
+        }
+      }
+    },
+    "facing": {
+      "north": { "y": 0 },
+      "south": { "y": 180 },
+      "west":  { "y": 270 },
+      "east":  { "y": 90 }
+    }
+  }
+}

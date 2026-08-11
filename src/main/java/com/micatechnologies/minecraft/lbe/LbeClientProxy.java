@@ -49,6 +49,38 @@ public class LbeClientProxy extends LbeCommonProxy {
     }
 
     /**
+     * Show the slot-machine screen.
+     *
+     * <p>Scheduled onto the client thread for the same reason the reveal screen is: this can be
+     * reached from a network handler, and swapping the active screen off-thread races the renderer.
+     */
+    @Override
+    public void openSlotMachineGui(net.minecraft.util.math.BlockPos pos) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+        mc.addScheduledTask(() -> mc.displayGuiScreen(
+            new com.micatechnologies.minecraft.lbe.client.gui.GuiSlotMachine(pos)));
+    }
+
+    /**
+     * Hand a spin result to the open slot-machine screen, if one is open.
+     *
+     * <p>Dropped when it is not. The money has already moved server-side, so a result nobody is
+     * looking at is an animation nobody needed — never a lost payout.
+     */
+    @Override
+    public void onSlotResult(
+        com.micatechnologies.minecraft.lbe.network.PacketSlotResult result) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+        mc.addScheduledTask(() -> {
+            if (mc.currentScreen
+                    instanceof com.micatechnologies.minecraft.lbe.client.gui.GuiSlotMachine) {
+                ((com.micatechnologies.minecraft.lbe.client.gui.GuiSlotMachine) mc.currentScreen)
+                    .accept(result);
+            }
+        });
+    }
+
+    /**
      * Binds item models. Must run on {@code ModelRegistryEvent}: models bake before {@code init}, so
      * registering a variant any later leaves the item rendering as the missing-model cube.
      */
@@ -57,6 +89,7 @@ public class LbeClientProxy extends LbeCommonProxy {
         for (Rarity rarity : Rarity.values()) {
             bindModel(LbeBlocks.boxItem(rarity));
         }
+        bindModel(com.micatechnologies.minecraft.lbe.casino.block.CasinoBlocks.slotMachineItem());
     }
 
     private static void bindModel(Item item) {

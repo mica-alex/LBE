@@ -2,7 +2,7 @@
 #
 # Block names follow the translation keys set in BlockLootBox: tile.lbe.loot_box_<tier>.name
 
-itemGroup.lbe=Loot Box Extravaganza
+itemGroup.lbe=Lucky Bucks Extravaganza
 
 tile.lbe.loot_box_common.name=Common Loot Box
 tile.lbe.loot_box_uncommon.name=Uncommon Loot Box
@@ -23,3 +23,18 @@ lbe.reveal.close=Click or press any key to close
 lbe.reveal.empty=...and it was empty!
 
 lbe.command.rarity.nothing_held=Hold an item, or name one: /lbe rarity <modid:name[#meta]>
+
+# The casino
+tile.lbe.slot_machine.name=Slot Machine
+lbe.casino.title=Lucky Bucks
+lbe.casino.spin=Spin
+lbe.casino.spinning=Spinning...
+lbe.casino.balance=Balance: %s
+lbe.casino.balance_unknown=Balance: -
+lbe.casino.win=You win %s
+lbe.casino.jackpot=JACKPOT!  %s
+lbe.casino.no_luck=No luck.
+lbe.casino.hint=Three of a kind pays up to %sx
+lbe.casino.rtp=Returns %s%% over time
+lbe.casino.closed=The casino is closed on this server.
+lbe.casino.bet_range=Bets here are between %s and %s.

@@ -1,0 +1,17 @@
+{
+  "__comment": "The item shows the machine's head, which is the half with the reels on it and therefore the half that reads as a slot machine in an inventory slot.",
+  "parent": "block/cube",
+  "textures": {
+    "particle": "lbe:blocks/slot_machine_upper_front",
+    "north": "lbe:blocks/slot_machine_upper_front",
+    "south": "lbe:blocks/slot_machine_upper_side",
+    "east": "lbe:blocks/slot_machine_upper_side",
+    "west": "lbe:blocks/slot_machine_upper_side",
+    "up": "lbe:blocks/slot_machine_top",
+    "down": "lbe:blocks/slot_machine_bottom"
+  },
+  "display": {
+    "gui": { "rotation": [30, 225, 0], "translation": [0, 0, 0], "scale": [0.625, 0.625, 0.625] },
+    "fixed": { "rotation": [0, 180, 0], "scale": [0.5, 0.5, 0.5] }
+  }
+}

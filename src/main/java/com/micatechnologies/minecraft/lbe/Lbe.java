@@ -2,6 +2,9 @@ package com.micatechnologies.minecraft.lbe;
 
 import com.micatechnologies.minecraft.lbe.block.LbeBlocks;
 import com.micatechnologies.minecraft.lbe.block.TileEntityLootBox;
+import com.micatechnologies.minecraft.lbe.casino.block.CasinoBlocks;
+import com.micatechnologies.minecraft.lbe.casino.block.TileEntitySlotMachine;
+import com.micatechnologies.minecraft.lbe.casino.economy.LbeEconomy;
 import com.micatechnologies.minecraft.lbe.catalog.LootCatalog;
 import com.micatechnologies.minecraft.lbe.command.CommandLbe;
 import com.micatechnologies.minecraft.lbe.world.LootBoxWorldGen;
@@ -42,7 +45,9 @@ import org.apache.logging.log4j.Logger;
  *   <li>{@code postInit} — <b>the catalogue is built here, and it must be.</b> Every other mod has
  *       finished registering its items and recipes by this point and not one moment earlier, so this
  *       is the first instant at which the question "what is in this pack?" has a correct answer.</li>
- *   <li>{@code serverStarting} — the {@code /lbe} command.</li>
+ *   <li>{@code serverStarting} — the {@code /lbe} command, and the casino's connection to SUM's
+ *       economy if that mod is installed. Not earlier: SUM chooses its backend as the server
+ *       starts.</li>
  * </ul>
  *
  * <p><b>Side discipline.</b> Everything reachable from this class must be loadable on a dedicated
@@ -53,7 +58,14 @@ import org.apache.logging.log4j.Logger;
 @Mod(modid = LbeConstants.MOD_NAMESPACE,
      version = LbeConstants.MOD_VERSION,
      name = LbeConstants.MOD_NAME,
-     acceptedMinecraftVersions = "[1.12.2]")
+     acceptedMinecraftVersions = "[1.12.2]",
+     // 'after', not 'required-after': SUM is optional, and LBE loads happily without it.
+     //
+     // But when it IS present, load order decides who handles FMLServerStartingEvent first, and
+     // SUM installs its economy provider on that event. Without this line LBE asked for a handle
+     // before SUM had published one and the casino switched itself off on a server that was
+     // perfectly well configured — silently, and only on the mod orderings where LBE sorted first.
+     dependencies = "after:sum")
 public class Lbe {
 
     public static final Logger LOGGER = LogManager.getLogger(LbeConstants.MOD_NAMESPACE);
@@ -72,8 +84,11 @@ public class Lbe {
         MinecraftForge.EVENT_BUS.register(new LootTableInjector());
         com.micatechnologies.minecraft.lbe.network.LbeNetwork.init();
         LbeBlocks.init();
+        CasinoBlocks.init();
         GameRegistry.registerTileEntity(TileEntityLootBox.class,
             new ResourceLocation(LbeConstants.MOD_NAMESPACE, "loot_box"));
+        GameRegistry.registerTileEntity(TileEntitySlotMachine.class,
+            new ResourceLocation(LbeConstants.MOD_NAMESPACE, LbeConstants.SLOT_MACHINE_NAME));
         LbeTab.initTabElements();
         // Weight 0 is the middle of the road: LBE has no opinion about running before or after any
         // other generator, because it only ever writes into air that is already there.
@@ -107,5 +122,24 @@ public class Lbe {
     @EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
         event.registerServerCommand(new CommandLbe());
+        // Must be here and not earlier: SUM decides which economy backend it is using as the server
+        // starts, so asking during preInit is asking before there is an answer.
+        LbeEconomy.onServerStarting();
+    }
+
+    /**
+     * Runs after every mod's {@code serverStarting}, which is the first moment SUM's economy is
+     * guaranteed to be published if it is going to be. See {@link LbeEconomy#onServerStarted()}.
+     */
+    @EventHandler
+    public void serverStarted(net.minecraftforge.fml.common.event.FMLServerStartedEvent event) {
+        LbeEconomy.onServerStarted();
+    }
+
+    @EventHandler
+    public void serverStopped(net.minecraftforge.fml.common.event.FMLServerStoppedEvent event) {
+        // Otherwise a single-player client carries the first world's economy handle into the next
+        // world it opens, which is a different save with a different set of balances.
+        LbeEconomy.onServerStopped();
     }
 }

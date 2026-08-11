@@ -27,4 +27,20 @@ public class LbeCommonProxy implements LbeProxy {
                               java.util.List<net.minecraft.item.ItemStack> contents) {
         // No screens on a dedicated server.
     }
+
+    /**
+     * No-op: there is no screen on a server.
+     *
+     * <p>Present so the packet handlers and the tile entity can call the proxy unconditionally,
+     * which is what keeps a {@code net.minecraft.client} import out of common code.
+     */
+    @Override
+    public void openSlotMachineGui(net.minecraft.util.math.BlockPos pos) {
+    }
+
+    /** No-op: a dedicated server never receives its own result packet. */
+    @Override
+    public void onSlotResult(
+        com.micatechnologies.minecraft.lbe.network.PacketSlotResult result) {
+    }
 }

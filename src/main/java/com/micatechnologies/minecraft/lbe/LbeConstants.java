@@ -22,6 +22,18 @@ public final class LbeConstants {
     /** Registry name prefix for the loot-box blocks: {@code loot_box_common} and friends. */
     public static final String LOOT_BOX_PREFIX = "loot_box_";
 
+    /** Registry name of the slot machine, the first of the casino blocks. */
+    public static final String SLOT_MACHINE_NAME = "slot_machine";
+
+    /**
+     * SUM's mod id, for the casino's optional economy.
+     *
+     * <p>A string rather than a class reference on purpose — see
+     * {@link com.micatechnologies.minecraft.lbe.casino.economy.LbeEconomy}, which explains why
+     * naming a SUM type outside one guarded spot breaks LBE on every pack without SUM.
+     */
+    public static final String SUM_MOD_ID = "sum";
+
     /**
      * NBT key under which a loot box's roll seed travels in a dropped {@code ItemStack}.
      *

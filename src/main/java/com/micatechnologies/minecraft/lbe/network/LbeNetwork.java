@@ -8,9 +8,13 @@ import net.minecraftforge.fml.relauncher.Side;
 /**
  * LBE's network channel. Registered in {@code preInit}, on both sides.
  *
- * <p>Only one packet so far, and only one direction: the server tells a client what came out of a
- * box it just opened, so the client can put on a show about it. Nothing is ever sent client → server
- * — opening is a block interaction, which vanilla already delivers.</p>
+ * <p>Loot boxes need one direction only: the server tells a client what came out of a box it just
+ * opened, so the client can put on a show about it. Opening is a block interaction, which vanilla
+ * already delivers, so nothing is sent the other way.</p>
+ *
+ * <p>The casino needs both. A bet is a decision a player makes inside a screen, not a block
+ * interaction, so {@link PacketSlotSpin} is LBE's only client → server message — and therefore the
+ * only one that has to treat its contents as hostile. It says so at length in its own javadoc.</p>
  */
 public final class LbeNetwork {
 
@@ -30,5 +34,10 @@ public final class LbeNetwork {
         // net.minecraft.client type and goes through Lbe.proxy instead.
         CHANNEL.registerMessage(PacketRevealLoot.Handler.class, PacketRevealLoot.class,
             nextId++, Side.CLIENT);
+        CHANNEL.registerMessage(PacketSlotResult.Handler.class, PacketSlotResult.class,
+            nextId++, Side.CLIENT);
+        // The only one handled on the server, and the only one a player can forge.
+        CHANNEL.registerMessage(PacketSlotSpin.Handler.class, PacketSlotSpin.class,
+            nextId++, Side.SERVER);
     }
 }

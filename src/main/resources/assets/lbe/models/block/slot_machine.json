@@ -1,0 +1,21 @@
+{
+  "__comment": "The cabinet is slightly narrower than a full block so a row of machines reads as separate units rather than a wall. Both halves share this model; the blockstate swaps the textures.",
+  "parent": "block/block",
+  "textures": {
+    "particle": "#front"
+  },
+  "elements": [
+    {
+      "from": [1, 0, 1],
+      "to": [15, 16, 15],
+      "faces": {
+        "north": { "texture": "#front", "cullface": "north" },
+        "south": { "texture": "#side" },
+        "west":  { "texture": "#side" },
+        "east":  { "texture": "#side" },
+        "up":    { "texture": "#top" },
+        "down":  { "texture": "#bottom" }
+      }
+    }
+  ]
+}
