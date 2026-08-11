@@ -4,14 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Purpose
 
-LBE ("Loot Box Extravaganza") is a **Minecraft 1.12.2 Forge mod** (mod id: `lbe`) that scatters four
-tiers of loot box through the world and fills them with items from **every installed mod**, sorted
-into those tiers automatically.
+LBE ("Lucky Bucks Extravaganza", formerly "Loot Box Extravaganza") is a **Minecraft 1.12.2 Forge
+mod** (mod id: `lbe`) with two halves:
 
-**The sorting is the mod.** Everything else — the block, the world generator, the roll — is
-scaffolding around a scoring model that reads Forge's item and recipe registries at postInit and
-works out what each item is worth. If you are changing something here, know which side of that line
-it is on.
+1. **Loot boxes** — four tiers scattered through the world, filled with items from **every installed
+   mod**, sorted into those tiers automatically.
+2. **The casino** — gambling games played for real server currency, starting with a slot machine.
+
+**The sorting is the first half.** Everything else around it — the block, the world generator, the
+roll — is scaffolding around a scoring model that reads Forge's item and recipe registries at
+postInit and works out what each item is worth. If you are changing something there, know which side
+of that line it is on.
+
+**The casino needs money, and LBE does not have any.** It runs on SUM's economy API, as a
+**compile-only, optional** dependency: on a pack without SUM the mod loads, the loot boxes work
+unchanged, and the machines say they are closed. That property is enforced by structure — exactly
+one class in LBE may name a SUM type — and it is easy to break without noticing.
+**Read [`docs/design/CASINO.md`](docs/design/CASINO.md) before touching anything under `casino/`.**
+
+The mod id stays `lbe` through the rename, and so do every registry name and config key: changing
+them would orphan blocks in existing worlds and silently reset every server's config.
 
 Build system is GregTechCEu Buildscripts (a RetroFuturaGradle wrapper), the same as the sibling mods
 `RCMC`, `minecraft-city-super-mod` (CSM), `uia-server-utility-mod` (SUM) and `LDIB`. This repo was
@@ -69,6 +81,13 @@ model structurally *cannot* see.
 ### Layers
 
 ```
+casino/      The games. See docs/design/CASINO.md.
+  slots/                  pure game logic, ZERO Minecraft types, RTP pinned by test
+  economy/                the SUM seam — CasinoBank/Wager are SUM-free; only
+                          SumEconomyBridge names a SUM type, and only LbeEconomy
+                          reaches it, behind Loader.isModLoaded("sum")
+  block/                  the machines
+
 rarity/      The scoring model. Pure Java, ZERO Minecraft types.
   ItemGraph               the seam — what the scorer is allowed to know
   RarityScorer            memoised, cycle-safe recursion over the recipe graph

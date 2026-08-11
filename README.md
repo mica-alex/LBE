@@ -1,10 +1,19 @@
-# LBE — Loot Box Extravaganza
+# LBE — Lucky Bucks Extravaganza
 
-A Minecraft **1.12.2 Forge** mod that scatters four tiers of **loot box** through the world and fills
-them with items drawn from **every mod you have installed** — with no per-mod loot table written by
-anyone.
+A Minecraft **1.12.2 Forge** mod in two halves.
 
-That last part is the mod. Everything else is scaffolding around it.
+**Loot boxes.** Four tiers scattered through the world, filled with items drawn from **every mod you
+have installed** — with no per-mod loot table written by anyone. That part is the mod; everything
+else is scaffolding around it.
+
+**A casino.** Gambling games played for real server currency, starting with a slot machine. This
+half needs an economy, so it uses [SUM](https://github.com/mica-alex/uia-server-utility-mod)'s —
+**optionally**. Without SUM installed, LBE loads normally, the loot boxes work exactly as described
+below, and the machines politely say the casino is closed. Nothing about the loot boxes depends on
+having a currency.
+
+> Formerly *Loot Box Extravaganza*. The mod id is still `lbe` and every registry name is unchanged,
+> so worlds and configs carry over untouched.
 
 ## The idea
 
