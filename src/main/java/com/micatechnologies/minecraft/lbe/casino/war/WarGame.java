@@ -1,29 +1,39 @@
 package com.micatechnologies.minecraft.lbe.casino.war;
 
+import com.micatechnologies.minecraft.lbe.casino.CasinoOdds;
 import com.micatechnologies.minecraft.lbe.casino.GameResult;
 import com.micatechnologies.minecraft.lbe.casino.cards.Card;
 import com.micatechnologies.minecraft.lbe.casino.cards.Deck;
 import java.util.Random;
 
 /**
- * Casino War: one card each against the dealer, high card wins even money, a tie pushes.
+ * Casino War: one card each against the dealer, high card wins, a tie returns the stake.
  *
- * <p>Ported from the Discord bot's {@code war_game.py}, rules unchanged — including the tie, which
- * its own comment marks as "casual".
+ * <p>Ported from the Discord bot's {@code war_game.py}, with <b>one deliberate rules change</b>: the
+ * win no longer pays flat even money.
  *
- * <p><b>These rules have no house edge.</b> Player and dealer draw from the same deck, so by
- * symmetry a win is exactly as likely as a loss, and a tie returns the stake. The return to player
- * is exactly 1.0 — see {@link #returnToPlayer()}.
+ * <p>Under the bot's rules the game returned exactly 100%, and the tie was why. Player and dealer
+ * draw from the same deck, so a win is exactly as likely as a loss; handing the stake back on a tie
+ * then made the whole thing wash out no matter how often ties came up. A real casino resolves a tie
+ * by going to "war" — the player doubles, three cards burn, one more card each decides it — and that
+ * single rule is its entire ~2.9% edge.
  *
- * <p>A real casino does not play it this way. There, a tie either loses outright or forces a "war":
- * the player doubles their stake, three cards are burned, and one more card each decides it. That
- * one rule is the entire house edge in the real game, worth about 2.9%. The bot dropped it, which
- * is a reasonable call for a Discord score and a consequential one for a server economy.
+ * <p>Rather than bolt a second decision onto a one-click game, the push is kept and paid for out of
+ * the win: {@link #WIN_MULTIPLIER} is priced so that wins and pushes together return
+ * {@link CasinoOdds#STANDARD_RETURN}. Same game to play, same friendly tie, and the house now keeps
+ * 3%.
  */
 public final class WarGame {
 
-    /** What beating the dealer returns, "for 1". Even money. */
-    public static final double WIN_MULTIPLIER = 2.0;
+    /**
+     * What beating the dealer returns, "for 1": about 1.94.
+     *
+     * <p>Priced, not chosen. A win happens on 24 of every 51 deals and a tie on 3, so this is what
+     * {@link CasinoOdds#payoutFor} says a win must pay for the two together to return 97% — the
+     * push is not free, and pretending it was is what made the bot's version break even.
+     */
+    public static final double WIN_MULTIPLIER = CasinoOdds.round(
+        CasinoOdds.payoutFor((1.0 - 3.0 / 51.0) / 2.0, 3.0 / 51.0));
 
     /** What a tie returns: the stake, and nothing more. */
     public static final double PUSH_MULTIPLIER = 1.0;
@@ -49,13 +59,12 @@ public final class WarGame {
     }
 
     /**
-     * The long-run fraction of money wagered that comes back: exactly 1.0.
+     * The long-run fraction of money wagered that comes back: 97%.
      *
-     * <p>Worked out from the deck rather than assumed. Of the 52×51 ordered ways to deal two cards,
-     * the tie count is 52×3 (each card has three others of its rank), and by symmetry the remaining
-     * deals split evenly into wins and losses. So
-     * {@code P(win) × 2 + P(tie) × 1 = (1 - P(tie))/2 × 2 + P(tie) = 1}, whatever P(tie) happens to
-     * be — the tie cancels out entirely, which is exactly why the real game does not push on it.
+     * <p>Worked out from the deck rather than assumed. Of the 52×51 ordered ways to deal two cards
+     * the tie count is 52×3 — each card has three others of its rank — and by symmetry the rest
+     * split evenly into wins and losses. So {@code P(win) × WIN_MULTIPLIER + P(tie) × 1}, which is
+     * the equation {@link #WIN_MULTIPLIER} was solved from and is therefore true by construction.
      */
     public static double returnToPlayer() {
         double tie = tieProbability();

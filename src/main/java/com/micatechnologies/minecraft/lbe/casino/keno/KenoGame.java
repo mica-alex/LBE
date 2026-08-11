@@ -1,5 +1,6 @@
 package com.micatechnologies.minecraft.lbe.casino.keno;
 
+import com.micatechnologies.minecraft.lbe.casino.CasinoOdds;
 import com.micatechnologies.minecraft.lbe.casino.GameResult;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -13,13 +14,22 @@ import java.util.TreeSet;
  * Keno: pick up to ten numbers from eighty, twenty are drawn, matches pay.
  *
  * <p>Ported from the Discord bot's {@code keno_game.py} and the {@code KENO_PAYTABLE} it reads from
- * {@code ServerLeaderboard}, unchanged.
+ * {@code ServerLeaderboard}, with <b>the payouts rescaled</b>.
  *
- * <p>Unlike most of the games here there is no single house edge — each pick count is its own bet
- * with its own return, ranging from about 74% to 95%. {@link #returnToPlayer(int)} computes each one
- * exactly from the hypergeometric distribution, and a test pins every row, because a paytable this
- * shape is very easy to mistype into a money printer: one digit in the ten-pick row is the
- * difference between a 10,000× jackpot that costs 0.3% of turnover and one that costs 30%.
+ * <p>The bot's table ran 45% to 75% depending on how many numbers you picked, against 70-80% for
+ * keno in a real casino — and the ten-pick ticket, the one the biggest jackpot is on, was the worst
+ * bet on the board at 45%. That is the opposite failure to the games that returned 100%, and just as
+ * worth fixing: a player who works out that picking more numbers is punished will stop playing, and
+ * they are right to.
+ *
+ * <p>Every row is now the bot's own payout shape scaled to {@link CasinoOdds#KENO_RETURN}, so the
+ * relative worth of each match count is untouched and only the level moved. Each pick count returns
+ * 91.3% to 92.5%, the spread being what is left after rounding the multipliers to one decimal so a
+ * screen can print them.
+ *
+ * <p>Every row is pinned by a test. A paytable this shape is very easy to mistype into a money
+ * printer: one digit in the ten-pick row is the difference between a jackpot that costs 0.3% of
+ * turnover and one that costs 30%.
  */
 public final class KenoGame {
 
@@ -35,21 +45,27 @@ public final class KenoGame {
     /**
      * Payout per pick count and match count, "for 1".
      *
-     * <p>{@code PAYTABLE[picks][matches]}. Row 0 is unused so the index reads naturally. Copied
-     * verbatim from the bot; a match count past the end of a row pays nothing.
+     * <p>{@code PAYTABLE[picks][matches]}. Row 0 is unused so the index reads naturally. A match
+     * count past the end of a row pays nothing.
+     *
+     * <p>These are the bot's figures scaled to {@link CasinoOdds#KENO_RETURN} — same shape, same
+     * relative worth of each match count, level moved up from the 45-75% it was returning. Doubles
+     * rather than integers because the scaling factor is not a round number and rounding to whole
+     * multipliers would distort the small ones badly: the 4-pick "2 matches" payout is 1.5, and
+     * there is no integer near it that does not change the game.
      */
-    private static final int[][] PAYTABLE = {
-        {},                                              // 0 picks (unused)
-        {0, 3},                                          // 1
-        {0, 0, 9},                                       // 2
-        {0, 0, 2, 25},                                   // 3
-        {0, 0, 1, 5, 60},                                // 4
-        {0, 0, 0, 3, 15, 200},                           // 5
-        {0, 0, 0, 2, 6, 50, 500},                        // 6
-        {0, 0, 0, 1, 4, 20, 100, 1000},                  // 7
-        {0, 0, 0, 0, 3, 10, 50, 250, 2000},              // 8
-        {0, 0, 0, 0, 2, 5, 25, 100, 750, 4000},          // 9
-        {0, 0, 0, 0, 0, 3, 15, 50, 250, 1500, 10000},    // 10
+    private static final double[][] PAYTABLE = {
+        {},                                                          // 0 picks (unused)
+        {0, 3.7},                                                    // 1
+        {0, 0, 15.3},                                                // 2
+        {0, 0, 2.9, 36.8},                                           // 3
+        {0, 0, 1.5, 7.5, 90.1},                                      // 4
+        {0, 0, 0, 4.9, 24.5, 327.3},                                 // 5
+        {0, 0, 0, 2.8, 8.5, 70.8, 707.5},                            // 6
+        {0, 0, 0, 1.4, 5.6, 28.1, 140.6, 1406.4},                    // 7
+        {0, 0, 0, 0, 4.6, 15.5, 77.4, 386.8, 3094.1},                // 8
+        {0, 0, 0, 0, 3, 7.4, 37.1, 148.2, 1111.6, 5928.6},           // 9
+        {0, 0, 0, 0, 0, 6.1, 30.6, 102, 509.8, 3058.6, 20390.6},     // 10
     };
 
     private KenoGame() {
@@ -57,12 +73,20 @@ public final class KenoGame {
     }
 
     /** What {@code matches} out of {@code picks} pays, "for 1". */
-    public static int payout(int picks, int matches) {
+    public static double payout(int picks, int matches) {
         if (picks < 1 || picks > MAX_PICKS) {
-            return 0;
+            return 0.0;
         }
-        int[] row = PAYTABLE[picks];
-        return matches >= 0 && matches < row.length ? row[matches] : 0;
+        double[] row = PAYTABLE[picks];
+        return matches >= 0 && matches < row.length ? row[matches] : 0.0;
+    }
+
+    /** The whole row for a pick count, so a screen can print the paytable it is playing against. */
+    public static double[] payoutsFor(int picks) {
+        if (picks < 1 || picks > MAX_PICKS) {
+            return new double[0];
+        }
+        return Arrays.copyOf(PAYTABLE[picks], PAYTABLE[picks].length);
     }
 
     /** Whether a set of picks is playable. */
@@ -158,9 +182,11 @@ public final class KenoGame {
 
         @Override
         public String describe() {
+            double multiplier = totalReturnMultiplier();
             return matches + " of " + picks.size() + " — "
-                + (totalReturnMultiplier() > 0.0
-                    ? "pays " + (long) totalReturnMultiplier() + "x" : "no win.");
+                + (multiplier > 0.0
+                    ? "pays " + String.format(java.util.Locale.ROOT, "%.1f", multiplier) + "x"
+                    : "no win.");
         }
     }
 

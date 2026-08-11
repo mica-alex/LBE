@@ -1,48 +1,47 @@
 package com.micatechnologies.minecraft.lbe.casino.highlow;
 
+import com.micatechnologies.minecraft.lbe.casino.CasinoOdds;
 import com.micatechnologies.minecraft.lbe.casino.GameResult;
 import com.micatechnologies.minecraft.lbe.casino.cards.Card;
 import com.micatechnologies.minecraft.lbe.casino.cards.Deck;
 import com.micatechnologies.minecraft.lbe.casino.cards.Rank;
+import com.micatechnologies.minecraft.lbe.casino.cards.Suit;
 import java.util.Random;
 
 /**
- * A card is shown; call whether the next one is higher or lower. Even money, ties push.
+ * A card is shown; call whether the next one is higher or lower.
  *
- * <p>Ported from the Discord bot's {@code highlow_game.py}, rules unchanged — its own docstring
- * calls them "casual rules — no odds-weighted payout", and that phrase is doing a great deal of
- * work.
+ * <p>Ported from the Discord bot's {@code highlow_game.py}, with <b>one deliberate rules change</b>:
+ * the payout is odds-weighted rather than even money. The bot's own docstring called its rules
+ * "casual — no odds-weighted payout", and that phrase was doing a great deal of work.
  *
- * <h2>⚠ These rules pay the player 150% of everything they wager</h2>
+ * <h2>Why the change was necessary</h2>
  *
- * <p>The player sees the base card <b>before</b> choosing a direction, and both directions pay the
- * same. So the correct move is always "pick whichever side has more cards left in the deck", and
- * that is not a subtle edge — on a base of 2 you call higher and win 48 times in 51.
+ * <p>The player sees the base card <b>before</b> choosing a direction. Under even money both
+ * directions paid the same, so "call the side with more cards left" was always correct and always
+ * available — on a base of 2 you call higher and win 48 times in 51. That returned <b>150.7%</b> of
+ * everything staked: every dollar came back as a dollar fifty, at whatever rate a player could press
+ * a button. Not an exploit anyone had to discover; the obvious way to play.
  *
- * <p>Worked out exactly in {@link #returnToPlayerWithOptimalPlay()}: <b>1.5068</b>. Every dollar
- * staked returns a dollar and a half. A player who notices — and it takes one hand to notice — turns
- * the machine into an income of 50% per press of a button, limited only by the server's maximum bet
- * and how fast they can click.
+ * <h2>What it does now</h2>
  *
- * <p>{@link #returnToPlayerWithRandomPlay()} is exactly 1.0, so even a player choosing at random
- * costs the house nothing and gains it nothing. There is no way to play this badly enough to lose
- * money over time.
+ * <p>Each direction pays the inverse of its actual chance, scaled to
+ * {@link CasinoOdds#STANDARD_RETURN}: calling higher on a 3 pays 1.06×, calling lower on it pays
+ * 11.62×, and the ladder is symmetric about the eight. <b>Every call returns the same 97%</b> —
+ * which is roulette's property, and the thing that makes a game a game rather than a lever: there is
+ * no longer a better side to pick, only a safer one and a bolder one.
  *
- * <p><b>This is faithful to the bot and unsuitable for a live economy.</b> It is fine against a
- * Discord score, where the currency is engagement and inflation costs nobody anything. It is not
- * fine against a balance that also buys plots. The conventional fix is an odds-weighted payout —
- * pay the inverse of the actual chance, times a house factor — which turns the free choice into a
- * priced one and makes every base card equally (un)attractive. That is a rules change, so it is not
- * made here; see the warning this ships with in the config and the note in
- * {@code docs/design/CASINO.md}.
+ * <p>Both multipliers are computed before the player commits and shown on the buttons, so the choice
+ * is informed rather than a trap. A near-certain call paying barely more than the stake looks odd
+ * for a moment and is exactly correct.
  */
 public final class HighLowGame {
 
-    /** What a correct call returns, "for 1". Even money, per the bot. */
-    public static final double WIN_MULTIPLIER = 2.0;
-
-    /** What an equal rank returns: the stake back. */
+    /** What an equal rank returns: the stake back, as in the bot. */
     public static final double PUSH_MULTIPLIER = 1.0;
+
+    /** The 51 cards a player has not seen once the base card is face up. */
+    public static final int UNSEEN = 51;
 
     /** Which way the next card is called to go. */
     public enum Call {
@@ -54,10 +53,36 @@ public final class HighLowGame {
     private final Deck deck;
     private boolean resolved;
 
-    /** Deals the base card and waits for a call. */
+    /**
+     * Deals the base card and waits for a call.
+     *
+     * <p><b>A two or an ace is never the base card.</b> Those are the only ranks with a call that
+     * cannot win at all — nothing is below a two — and, worse, their one legal call is a
+     * near-certainty that honest pricing values below the stake: calling higher on a two wins 48
+     * times in 51 and so pays 0.97×. A hand whose only move is "win and still lose three cents" is
+     * not a hand, so it is not dealt. Skipping those eight cards leaves every hand with two real
+     * choices, both paying more than they cost.
+     *
+     * <p>This does not touch the return: every call is priced at
+     * {@link CasinoOdds#STANDARD_RETURN} whatever the base card, so removing some base cards removes
+     * no edge and creates none.
+     */
     public HighLowGame(Random random) {
         this.deck = new Deck(random);
-        this.base = deck.deal();
+        Card dealt = deck.deal();
+        while (!isPlayableBase(dealt)) {
+            dealt = deck.deal();
+        }
+        this.base = dealt;
+    }
+
+    /**
+     * Whether a card makes a hand worth playing — that is, whether both calls can win.
+     *
+     * <p>True for 3 through king. See the constructor for why the other two are skipped.
+     */
+    public static boolean isPlayableBase(Card card) {
+        return cardsAbove(card) > 0 && cardsBelow(card) > 0;
     }
 
     /** The card on show. */
@@ -100,35 +125,87 @@ public final class HighLowGame {
     }
 
     /**
-     * The return to a player who always calls the side with more cards left: <b>1.5068</b>.
+     * How many unseen cards make {@code call} on {@code base} a winner.
      *
-     * <p>Computed, not estimated. Each of the 13 ranks is equally likely as a base card; for each,
-     * the better side holds {@code max(above, below)} of the 51 unseen cards and three tie. The
-     * favourable counts across the ranks are 48, 44, 40, 36, 32, 28, 24, 28, 32, 36, 40, 44, 48 —
-     * summing to 480 — so the return is {@code (2 × 480 + 13 × 3) / (13 × 51)}.
+     * <p>Zero means the call cannot win — calling higher on an ace, or lower on a two — and such a
+     * call must be refused rather than priced, which {@link #isCallable} exists to check.
      */
-    public static double returnToPlayerWithOptimalPlay() {
-        int favourableTotal = 0;
-        for (Rank rank : Rank.values()) {
-            Card card = new Card(rank, com.micatechnologies.minecraft.lbe.casino.cards.Suit.SPADES);
-            favourableTotal += Math.max(cardsAbove(card), cardsBelow(card));
-        }
-        int ranks = Rank.values().length;
-        return (WIN_MULTIPLIER * favourableTotal + ranks * cardsEqual())
-            / (double) (ranks * 51);
+    public static int winningCards(Card base, Call call) {
+        return call == Call.HIGHER ? cardsAbove(base) : cardsBelow(base);
+    }
+
+    /** Whether {@code call} on {@code base} can win at all. */
+    public static boolean isCallable(Card base, Call call) {
+        return winningCards(base, call) > 0;
     }
 
     /**
-     * The return to a player who calls at random: exactly 1.0.
+     * What {@code call} pays if it comes in, "for 1".
      *
-     * <p>The floor, in other words. Averaged over both directions the favourable count is always
-     * half of the 48 non-tying cards, so the ties cancel exactly as they do in war. There is no way
-     * to play this game badly enough to lose money to the house over time.
+     * <p>The inverse of its true chance, scaled so every legal call on every base card returns the
+     * same {@link CasinoOdds#STANDARD_RETURN}. Below 1 for a near-certain call, which is correct:
+     * something that wins 48 times in 51 cannot pay more than it costs without being free money.
+     *
+     * @return 0 for a call that cannot win.
      */
-    public static double returnToPlayerWithRandomPlay() {
-        int ranks = Rank.values().length;
-        return (WIN_MULTIPLIER * (48.0 / 2.0) * ranks + ranks * cardsEqual())
-            / (double) (ranks * 51);
+    public static double payoutFor(Card base, Call call) {
+        int winners = winningCards(base, call);
+        if (winners <= 0) {
+            return 0.0;
+        }
+        double winChance = winners / (double) UNSEEN;
+        double pushChance = cardsEqual() / (double) UNSEEN;
+        return CasinoOdds.round(CasinoOdds.payoutFor(winChance, pushChance));
+    }
+
+    /**
+     * The return on one specific call — the same for every legal one, up to rounding.
+     *
+     * <p>This is the property the whole redesign exists to produce, so it is worth being able to ask
+     * about directly rather than inferring it from a simulation.
+     */
+    public static double returnToPlayer(Card base, Call call) {
+        int winners = winningCards(base, call);
+        if (winners <= 0) {
+            return 0.0;
+        }
+        return winners / (double) UNSEEN * payoutFor(base, call)
+            + cardsEqual() / (double) UNSEEN * PUSH_MULTIPLIER;
+    }
+
+    /**
+     * The worst return available across every legal call on every base card.
+     *
+     * <p>With odds-weighted payouts this sits at the target, a hair either side of it from rounding
+     * the printed multipliers to two decimals. The old even-money rules had a spread of 0.61 to 1.88
+     * depending on which card came up and which way you called — which is precisely why a player
+     * could pick the good end of it every time.
+     */
+    public static double worstReturnToPlayer() {
+        return extremeReturn(true);
+    }
+
+    /** The best return available across every legal call. See {@link #worstReturnToPlayer()}. */
+    public static double bestReturnToPlayer() {
+        return extremeReturn(false);
+    }
+
+    private static double extremeReturn(boolean lowest) {
+        double extreme = lowest ? Double.MAX_VALUE : 0.0;
+        for (Rank rank : Rank.values()) {
+            Card card = new Card(rank, Suit.SPADES);
+            if (!isPlayableBase(card)) {
+                continue;   // never dealt as a base card, so its prices are not on offer
+            }
+            for (Call call : Call.values()) {
+                if (!isCallable(card, call)) {
+                    continue;
+                }
+                double rtp = returnToPlayer(card, call);
+                extreme = lowest ? Math.min(extreme, rtp) : Math.max(extreme, rtp);
+            }
+        }
+        return extreme;
     }
 
     /** One resolved hand. */
@@ -163,7 +240,15 @@ public final class HighLowGame {
             }
             boolean higher = next.value() > base.value();
             boolean correct = (call == Call.HIGHER) == higher;
-            return correct ? WIN_MULTIPLIER : 0.0;
+            // The price was fixed the moment the base card was shown, so it is recomputed from the
+            // base card rather than stored — the same input gives the same answer, and there is no
+            // way for a stale multiplier to be paid against a different card.
+            return correct ? payoutFor(base, call) : 0.0;
+        }
+
+        /** What this call was paying before it was made, "for 1". */
+        public double offeredMultiplier() {
+            return payoutFor(base, call);
         }
 
         @Override

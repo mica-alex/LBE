@@ -1,29 +1,32 @@
 package com.micatechnologies.minecraft.lbe.casino.coinflip;
 
+import com.micatechnologies.minecraft.lbe.casino.CasinoOdds;
 import com.micatechnologies.minecraft.lbe.casino.GameResult;
 import java.util.Random;
 
 /**
- * Call heads or tails; a correct call pays 2× the stake.
+ * Call heads or tails.
  *
- * <p>Ported from the Discord bot's {@code !coinflip} (its {@code COINFLIP_PAYOUT} is 2), rules
- * unchanged.
+ * <p>Ported from the Discord bot's {@code !coinflip}, with <b>one deliberate rules change</b>: it
+ * paid a flat 2× ({@code COINFLIP_PAYOUT}), which on a fair coin returns exactly 100% of everything
+ * staked, forever. The house made nothing and lost nothing — pure variance, and a table the casino
+ * could never fund itself from.
  *
- * <p><b>This game has no house edge at all.</b> A fair coin paying 2-for-1 returns exactly 100% of
- * everything wagered, forever — see {@link #returnToPlayer()}, which is 1.0 and is pinned by a test.
- * That is fine and intended in Discord, where the currency is a score; it is a different proposition
- * against a server economy that also buys plots and shop goods. It does not <i>drain</i> money, so
- * the casino cannot fund itself from it, and it does not <i>print</i> money either — it is pure
- * variance, and over time the house and the players both end up roughly where they started while
- * individual balances swing hard.
- *
- * <p>If an edge is ever wanted, the conventional fix is to pay 1.95 rather than 2, which costs a
- * player 2.5% and is invisible at a glance. That is a rules change, so it is not made here.
+ * <p>It now pays 1.94×, giving the standard 3% edge. That is a 3% cut on a
+ * number most players never look at closely, and it is the difference between a table that pays for
+ * itself and one that is decoration.
  */
 public final class CoinFlipGame {
 
-    /** What a correct call returns, "for 1". The bot's {@code COINFLIP_PAYOUT}. */
-    public static final double WIN_MULTIPLIER = 2.0;
+    /**
+     * What a correct call returns, "for 1": 1.94.
+     *
+     * <p>The bot paid a round 2, which is break-even on a fair coin. This is that scaled by
+     * {@link CasinoOdds#STANDARD_RETURN} — {@code 2 × 0.97} — so the coin stays fair and the price
+     * of playing is the payout rather than a rigged flip. A weighted coin would be the other way to
+     * get an edge and a far worse one: players can count outcomes.
+     */
+    public static final double WIN_MULTIPLIER = 2.0 * CasinoOdds.STANDARD_RETURN;
 
     private CoinFlipGame() {
         throw new AssertionError("No instances.");
@@ -46,11 +49,10 @@ public final class CoinFlipGame {
     }
 
     /**
-     * The long-run fraction of money wagered that comes back: exactly 1.0.
+     * The long-run fraction of money wagered that comes back: 97%.
      *
-     * <p>Half the flips return twice the stake and half return nothing, so
-     * {@code 0.5 × 2 + 0.5 × 0 = 1}. There is no rounding here and no approximation — the figure is
-     * exact, and so is the conclusion that the house makes nothing.
+     * <p>Half the flips return {@link #WIN_MULTIPLIER} and half return nothing, so the figure is
+     * simply half of it. Exact, with no rounding anywhere.
      */
     public static double returnToPlayer() {
         return 0.5 * WIN_MULTIPLIER;

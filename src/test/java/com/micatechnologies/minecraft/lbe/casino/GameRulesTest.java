@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.micatechnologies.minecraft.lbe.casino.CasinoOdds;
 import com.micatechnologies.minecraft.lbe.casino.cards.Card;
 import com.micatechnologies.minecraft.lbe.casino.cards.Deck;
 import com.micatechnologies.minecraft.lbe.casino.cards.Rank;
@@ -80,7 +81,7 @@ class GameRulesTest {
         Random rigged = new Random(4L);
         for (int i = 0; i < 1000; i++) {
             CoinFlipGame.Result result = CoinFlipGame.flip(CoinFlipGame.Side.HEADS, rigged);
-            assertEquals(result.call() == result.landed() ? 2.0 : 0.0,
+            assertEquals(result.call() == result.landed() ? CoinFlipGame.WIN_MULTIPLIER : 0.0,
                 result.totalReturnMultiplier());
         }
     }
@@ -106,7 +107,7 @@ class GameRulesTest {
     @Test
     @DisplayName("war: high card wins, low card loses, equal ranks push")
     void warRules() {
-        assertEquals(2.0, war(Rank.ACE, Rank.KING).totalReturnMultiplier());
+        assertEquals(WarGame.WIN_MULTIPLIER, war(Rank.ACE, Rank.KING).totalReturnMultiplier());
         assertEquals(0.0, war(Rank.TWO, Rank.THREE).totalReturnMultiplier());
         assertEquals(1.0, war(Rank.NINE, Rank.NINE).totalReturnMultiplier());
         assertTrue(war(Rank.NINE, Rank.NINE).isPush());
@@ -132,14 +133,29 @@ class GameRulesTest {
             HighLowGame game = new HighLowGame(random);
             Card base = game.base();
             HighLowGame.Result result = game.call(HighLowGame.Call.HIGHER);
-            int expected;
+            double expected;
             if (result.next().value() == base.value()) {
-                expected = 1;
+                expected = HighLowGame.PUSH_MULTIPLIER;
             } else {
-                expected = result.next().value() > base.value() ? 2 : 0;
+                expected = result.next().value() > base.value()
+                    ? HighLowGame.payoutFor(base, HighLowGame.Call.HIGHER) : 0.0;
             }
-            assertEquals(expected, (int) result.totalReturnMultiplier(),
+            assertEquals(expected, result.totalReturnMultiplier(), 1.0e-9,
                 base + " then " + result.next());
+        }
+    }
+
+    @Test
+    @DisplayName("high-low never deals a two or an ace as the base card")
+    void highLowSkipsDeadHands() {
+        // Both would leave a hand with one legal call priced below the stake. Driven through the
+        // real constructor, which is the thing that has to skip them.
+        Random random = new Random(31L);
+        for (int i = 0; i < 20_000; i++) {
+            Card base = new HighLowGame(random).base();
+            assertTrue(HighLowGame.isPlayableBase(base), "dealt an unplayable base card: " + base);
+            assertTrue(HighLowGame.payoutFor(base, HighLowGame.Call.HIGHER) > 1.0);
+            assertTrue(HighLowGame.payoutFor(base, HighLowGame.Call.LOWER) > 1.0);
         }
     }
 
@@ -153,22 +169,37 @@ class GameRulesTest {
     }
 
     @Test
-    @DisplayName("high-low really does pay 150% to a player calling the bigger side")
-    void highLowSimulatesToPlayerProfit() {
-        // The proof that the warning in HouseEdgeTest is about this code and not about a formula
-        // that happens to live near it. A strategy of four words, simulated, prints money.
-        Random random = new Random(9L);
+    @DisplayName("high-low: calling the bigger side no longer beats calling the smaller one")
+    void highLowStrategyNoLongerPays() {
+        // The regression test for the whole repricing. Under the bot's rules this exact strategy
+        // returned 150.7%; both strategies must now land on the same 97%, because that is what
+        // "there is no better side" means in practice rather than on paper.
+        double greedy = simulateHighLow(true, 21L);
+        double timid = simulateHighLow(false, 22L);
+        assertEquals(CasinoOdds.STANDARD_RETURN, greedy, 0.03,
+            "always calling the likelier side returned " + greedy);
+        assertEquals(CasinoOdds.STANDARD_RETURN, timid, 0.06,
+            "always calling the longer shot returned " + timid);
+        assertTrue(greedy < 1.0, "the obvious strategy must no longer print money: " + greedy);
+    }
+
+    /** Plays high-low many times, always calling the likelier ({@code greedy}) side or the longer. */
+    private static double simulateHighLow(boolean greedy, long seed) {
+        Random random = new Random(seed);
         double returned = 0.0;
+        int played = 0;
         for (int i = 0; i < SIMULATION_ROUNDS; i++) {
             HighLowGame game = new HighLowGame(random);
             Card base = game.base();
-            HighLowGame.Call call = HighLowGame.cardsAbove(base) >= HighLowGame.cardsBelow(base)
+            int above = HighLowGame.cardsAbove(base);
+            int below = HighLowGame.cardsBelow(base);
+            // Both calls are always legal now — a two or an ace is never dealt as a base card.
+            HighLowGame.Call call = (above >= below) == greedy
                 ? HighLowGame.Call.HIGHER : HighLowGame.Call.LOWER;
             returned += game.call(call).totalReturnMultiplier();
+            played++;
         }
-        double observed = returned / SIMULATION_ROUNDS;
-        assertEquals(HighLowGame.returnToPlayerWithOptimalPlay(), observed, 0.01);
-        assertTrue(observed > 1.4, "observed return " + observed + " should be about 1.51");
+        return returned / played;
     }
 
     @Test
