@@ -205,7 +205,11 @@ public class TileEntityCasinoMachine extends TileEntity {
     private static String validate(CasinoGame game, int optionA, int optionB, int[] numbers) {
         switch (game) {
             case COIN_FLIP:
-                return optionA == 0 || optionA == 1 ? null : "Call heads or tails.";
+                // sideFor tolerates anything, so this is the check that a nonsense option is a
+                // refusal rather than a silent "heads".
+                return optionA == CoinFlipGame.codeFor(CoinFlipGame.Side.HEADS)
+                    || optionA == CoinFlipGame.codeFor(CoinFlipGame.Side.TAILS)
+                    ? null : "Call heads or tails.";
             case ROULETTE: {
                 RouletteGame.BetType type = betType(optionA);
                 if (type == null) {
@@ -232,8 +236,7 @@ public class TileEntityCasinoMachine extends TileEntity {
             case SLOTS:
                 return SlotSpin.roll(random);
             case COIN_FLIP:
-                return CoinFlipGame.flip(
-                    optionA == 0 ? CoinFlipGame.Side.HEADS : CoinFlipGame.Side.TAILS, random);
+                return CoinFlipGame.flip(CoinFlipGame.sideFor(optionA), random);
             case WAR:
                 return WarGame.play(random);
             case ROULETTE:
@@ -262,7 +265,7 @@ public class TileEntityCasinoMachine extends TileEntity {
             }
             case COIN_FLIP: {
                 CoinFlipGame.Result flip = (CoinFlipGame.Result) result;
-                return new int[] {flip.landed() == CoinFlipGame.Side.HEADS ? 0 : 1};
+                return new int[] {CoinFlipGame.codeFor(flip.landed())};
             }
             case WAR: {
                 WarGame.Result war = (WarGame.Result) result;

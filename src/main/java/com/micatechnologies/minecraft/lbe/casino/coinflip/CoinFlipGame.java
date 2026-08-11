@@ -40,6 +40,29 @@ public final class CoinFlipGame {
         public Side other() {
             return this == HEADS ? TAILS : HEADS;
         }
+
+        /** What a player sees on the button and in the result. */
+        public String label() {
+            return this == HEADS ? "Heads" : "Tails";
+        }
+    }
+
+    /**
+     * The number a side travels as, on the wire and in the option buttons.
+     *
+     * <p>Encoding and decoding live here together, and every caller goes through them, because the
+     * same mapping was previously written out by hand in three places — the button that offers the
+     * choice, the server that reads it, and the packet that reports the outcome. Three copies of
+     * "heads is zero" is three chances for one of them to disagree, and the failure mode is a coin
+     * that tells a player they called it wrong when they called it right.
+     */
+    public static int codeFor(Side side) {
+        return side == Side.HEADS ? 0 : 1;
+    }
+
+    /** The side a code means. Anything but {@link #codeFor}'s tails value reads as heads. */
+    public static Side sideFor(int code) {
+        return code == codeFor(Side.TAILS) ? Side.TAILS : Side.HEADS;
     }
 
     /** Flips once and reports whether {@code call} was right. */

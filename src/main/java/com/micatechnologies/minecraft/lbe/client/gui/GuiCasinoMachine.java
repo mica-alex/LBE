@@ -5,6 +5,7 @@ import com.micatechnologies.minecraft.lbe.LbeConstants;
 import com.micatechnologies.minecraft.lbe.casino.CasinoGame;
 import com.micatechnologies.minecraft.lbe.casino.block.TileEntityCasinoMachine;
 import com.micatechnologies.minecraft.lbe.casino.cards.Card;
+import com.micatechnologies.minecraft.lbe.casino.coinflip.CoinFlipGame;
 import com.micatechnologies.minecraft.lbe.casino.highlow.HighLowGame;
 import com.micatechnologies.minecraft.lbe.casino.keno.KenoGame;
 import com.micatechnologies.minecraft.lbe.casino.plinko.PlinkoGame;
@@ -102,6 +103,15 @@ public class GuiCasinoMachine extends GuiScreen {
     private boolean animating;
     private int animationTicks;
     private String status = "";
+
+    /**
+     * The label of the option actually sent with the last play.
+     *
+     * <p>Shown back to the player. Not decoration: a screen that displays the outcome but not the
+     * choice it sent leaves "I called heads and it said I was wrong" impossible to tell apart from
+     * "it sent tails", which is exactly the report this line exists to make answerable.
+     */
+    private String lastCallLabel = "";
 
     private GuiButton playButton;
 
@@ -252,8 +262,10 @@ public class GuiCasinoMachine extends GuiScreen {
     private void buildOptions() {
         switch (game) {
             case COIN_FLIP:
-                options.add(new Option("Heads", 0, 0));
-                options.add(new Option("Tails", 1, 0));
+                for (CoinFlipGame.Side side : CoinFlipGame.Side.values()) {
+                    // Label and value from the same place, so they cannot drift apart.
+                    options.add(new Option(side.label(), CoinFlipGame.codeFor(side), 0));
+                }
                 break;
             case HIGH_LOW:
                 // Filled in once a base card has been dealt — until then there is nothing to price.
@@ -398,6 +410,7 @@ public class GuiCasinoMachine extends GuiScreen {
             ? null : options.get(selectedOption);
         int optionA = option == null ? 0 : option.valueA;
         int optionB = option == null ? 0 : option.valueB;
+        lastCallLabel = option == null ? "" : option.label;
         int[] numbers = new int[picks.size()];
         int i = 0;
         for (int pick : picks) {
@@ -495,12 +508,18 @@ public class GuiCasinoMachine extends GuiScreen {
                 : awaitingChoice ? "Choose above"
                 : "Play " + LbeEconomyFormat(bet);
         }
-        // Highlight the chosen option, since vanilla buttons have no selected state.
+        // Mark the chosen option, since vanilla buttons have no selected state. Colour alone is
+        // not enough — a player who cannot tell what is selected cannot tell whether the machine
+        // sent what they meant, and a brighter shade of text does not read as "this one".
         for (GuiButton button : buttonList) {
-            if (button.id >= ID_OPTION_BASE) {
-                boolean chosen = button.id - ID_OPTION_BASE == selectedOption
-                    && game != CasinoGame.KENO;
-                button.packedFGColour = chosen ? 0xFFD54F : 0;
+            if (button.id < ID_OPTION_BASE) {
+                continue;
+            }
+            int index = button.id - ID_OPTION_BASE;
+            boolean chosen = index == selectedOption && game != CasinoGame.KENO;
+            button.packedFGColour = chosen ? 0xFFD54F : 0;
+            if (index < options.size()) {
+                button.displayString = (chosen ? "> " : "") + options.get(index).label;
             }
         }
         super.drawScreen(mouseX, mouseY, partialTicks);
@@ -657,6 +676,10 @@ public class GuiCasinoMachine extends GuiScreen {
             colour = settled.multiplier() >= 50.0 ? 0xFFD54F : 0x7BE86C;
         }
         String line = animating ? "Good luck…" : status;
+        if (!lastCallLabel.isEmpty() && !options.isEmpty()) {
+            drawCenteredString(fontRenderer, "You called: " + lastCallLabel, width / 2,
+                textTop - 11, 0x8080A0);
+        }
         // Trimmed rather than allowed to run past the panel edge: a backend message can be longer
         // than anything written here, and one that overflows looks like a rendering fault.
         drawCenteredString(fontRenderer, trimToPanel(line), width / 2, textTop + 11, colour);
