@@ -21,7 +21,8 @@ public enum CasinoGame {
     HIGH_LOW("high_low_machine", "High-Low", Cabinet.TALL),
     ROULETTE("roulette_table", "Roulette", Cabinet.TABLE),
     PLINKO("plinko_machine", "Plinko", Cabinet.TALL),
-    KENO("keno_machine", "Keno", Cabinet.TALL);
+    KENO("keno_machine", "Keno", Cabinet.TALL),
+    BACCARAT("baccarat_table", "Baccarat", Cabinet.TABLE);
 
     /** What shape of block the game sits in. */
     public enum Cabinet {

@@ -42,6 +42,7 @@ MACHINES = {
     "roulette_table":   (False, (0x24, 0x3E, 0x50), (0x18, 0x2A, 0x38), "wheel"),
     "plinko_machine":   (True,  (0x50, 0x40, 0x24), (0x38, 0x2C, 0x18), "pegs"),
     "keno_machine":     (True,  (0x40, 0x24, 0x50), (0x2C, 0x18, 0x38), "grid"),
+    "baccarat_table":   (False, (0x1E, 0x44, 0x2E), (0x14, 0x2E, 0x1F), "baccarat"),
 }
 
 
@@ -158,7 +159,19 @@ def motif_grid(rows):
                 GOLD if (row + column) % 3 == 0 else FELT_LINE)
 
 
+def motif_baccarat(rows):
+    """Two hands facing each other across the felt, which is the whole game."""
+    box(rows, 2, 4, 5, 9, WHITE)
+    box(rows, 4, 5, 7, 10, (0xE0, 0xE0, 0xEA))
+    box(rows, 10, 4, 13, 9, WHITE)
+    box(rows, 8, 5, 11, 10, (0xE0, 0xE0, 0xEA))
+    rows[6][3] = RED
+    rows[6][12] = BLACK
+    box(rows, 7, 12, 8, 13, GOLD)
+
+
 MOTIFS = {
+    "baccarat": motif_baccarat,
     "coin": motif_coin,
     "cards": motif_cards,
     "arrows": motif_arrows,

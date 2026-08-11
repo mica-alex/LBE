@@ -4,6 +4,7 @@ import com.micatechnologies.minecraft.lbe.Lbe;
 import com.micatechnologies.minecraft.lbe.LbeConfig;
 import com.micatechnologies.minecraft.lbe.casino.CasinoGame;
 import com.micatechnologies.minecraft.lbe.casino.GameResult;
+import com.micatechnologies.minecraft.lbe.casino.baccarat.BaccaratGame;
 import com.micatechnologies.minecraft.lbe.casino.cards.Card;
 import com.micatechnologies.minecraft.lbe.casino.coinflip.CoinFlipGame;
 import com.micatechnologies.minecraft.lbe.casino.economy.LbeEconomy;
@@ -221,6 +222,9 @@ public class TileEntityCasinoMachine extends TileEntity {
             case PLINKO:
                 return optionA >= 0 && optionA < PlinkoGame.Risk.values().length ? null
                     : "Pick a risk level.";
+            case BACCARAT:
+                return BaccaratGame.sideFor(optionA) != null ? null
+                    : "Back the player, the banker, or a tie.";
             case KENO:
                 return KenoGame.isValid(toPicks(numbers)) ? null
                     : "Pick between 1 and " + KenoGame.MAX_PICKS + " numbers from 1 to "
@@ -245,6 +249,8 @@ public class TileEntityCasinoMachine extends TileEntity {
                 return PlinkoGame.drop(PlinkoGame.Risk.values()[optionA], random);
             case KENO:
                 return KenoGame.play(toPicks(numbers), random);
+            case BACCARAT:
+                return BaccaratGame.play(BaccaratGame.sideFor(optionA), random);
             default:
                 throw new IllegalStateException("No one-step resolution for " + game);
         }
@@ -285,6 +291,21 @@ public class TileEntityCasinoMachine extends TileEntity {
                     reveal[i] = path[i] ? 1 : 0;
                 }
                 reveal[path.length] = drop.slot();
+                return reveal;
+            }
+            case BACCARAT: {
+                BaccaratGame.Result coup = (BaccaratGame.Result) result;
+                // Both hands, each prefixed by its length so the screen knows where one ends.
+                int[] reveal = new int[2 + coup.playerHand().size() + coup.bankerHand().size()];
+                int at = 0;
+                reveal[at++] = coup.playerHand().size();
+                for (Card card : coup.playerHand()) {
+                    reveal[at++] = cardId(card);
+                }
+                reveal[at++] = coup.bankerHand().size();
+                for (Card card : coup.bankerHand()) {
+                    reveal[at++] = cardId(card);
+                }
                 return reveal;
             }
             case KENO: {

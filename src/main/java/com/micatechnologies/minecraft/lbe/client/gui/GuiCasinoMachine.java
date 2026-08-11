@@ -4,6 +4,7 @@ import com.micatechnologies.minecraft.lbe.LbeConfig;
 import com.micatechnologies.minecraft.lbe.LbeConstants;
 import com.micatechnologies.minecraft.lbe.casino.CasinoGame;
 import com.micatechnologies.minecraft.lbe.casino.block.TileEntityCasinoMachine;
+import com.micatechnologies.minecraft.lbe.casino.baccarat.BaccaratGame;
 import com.micatechnologies.minecraft.lbe.casino.cards.Card;
 import com.micatechnologies.minecraft.lbe.casino.coinflip.CoinFlipGame;
 import com.micatechnologies.minecraft.lbe.casino.highlow.HighLowGame;
@@ -248,6 +249,9 @@ public class GuiCasinoMachine extends GuiScreen {
             case WAR:
             case HIGH_LOW:
                 return 52;
+            case BACCARAT:
+                // Two rows of up to three cards, with a score beside each.
+                return 60;
             case PLINKO:
                 return 46;
             case KENO:
@@ -296,6 +300,14 @@ public class GuiCasinoMachine extends GuiScreen {
                     options.add(new Option(risk.name().charAt(0)
                         + risk.name().substring(1).toLowerCase(Locale.ROOT),
                         risk.ordinal(), 0));
+                }
+                break;
+            case BACCARAT:
+                for (BaccaratGame.Side side : BaccaratGame.Side.values()) {
+                    // Label, price and wire value from one place, as everywhere else.
+                    options.add(new Option(
+                        side.label() + " " + money(side.multiplier()) + "x",
+                        BaccaratGame.codeFor(side), 0));
                 }
                 break;
             case KENO:
@@ -548,6 +560,9 @@ public class GuiCasinoMachine extends GuiScreen {
             case PLINKO:
                 drawPlinko(centre, top);
                 break;
+            case BACCARAT:
+                drawBaccarat(centre, top);
+                break;
             case KENO:
                 drawKeno(left, top);
                 break;
@@ -641,6 +656,31 @@ public class GuiCasinoMachine extends GuiScreen {
         }
     }
 
+    /** Both hands, one per row, with the score that decided the coup. */
+    private void drawBaccarat(int centre, int top) {
+        if (settled == null || animating) {
+            drawCenteredString(fontRenderer, animating ? "Dealing…" : "Place your bet",
+                centre, top + 20, 0x909090);
+            return;
+        }
+        int[] reveal = settled.reveal();
+        int at = 0;
+        int playerCount = reveal.length > 0 ? reveal[at++] : 0;
+        StringBuilder playerHand = new StringBuilder();
+        for (int i = 0; i < playerCount && at < reveal.length; i++) {
+            playerHand.append(TileEntityCasinoMachine.cardFromId(reveal[at++])).append(' ');
+        }
+        int bankerCount = at < reveal.length ? reveal[at++] : 0;
+        StringBuilder bankerHand = new StringBuilder();
+        for (int i = 0; i < bankerCount && at < reveal.length; i++) {
+            bankerHand.append(TileEntityCasinoMachine.cardFromId(reveal[at++])).append(' ');
+        }
+        drawCenteredString(fontRenderer, "Player   " + playerHand.toString().trim(),
+            centre, top + 8, 0xC0C0D0);
+        drawCenteredString(fontRenderer, "Banker   " + bankerHand.toString().trim(),
+            centre, top + 26, 0xC0C0D0);
+    }
+
     private void drawKeno(int left, int top) {
         // A 10x8 board. Ticked numbers are gold; drawn ones outlined; hits are both.
         int cell = 14;
@@ -727,10 +767,33 @@ public class GuiCasinoMachine extends GuiScreen {
             case KENO:
                 rtp = KenoGame.returnToPlayer(Math.max(1, picks.size()));
                 break;
+            case BACCARAT:
+                // Each side has its own return, so show the one being backed.
+                return baccaratReturnLine();
             default:
                 return "";
         }
         return String.format(Locale.ROOT, "Returns %.1f%% over time", rtp * 100.0);
+    }
+
+    /**
+     * Baccarat's return depends on which side is backed, and the tableau makes a closed form hard,
+     * so the well-established figures are named rather than computed.
+     */
+    private String baccaratReturnLine() {
+        BaccaratGame.Side side = BaccaratGame.sideFor(
+            options.isEmpty() ? 0 : options.get(Math.min(selectedOption, options.size() - 1)).valueA);
+        if (side == null) {
+            return "";
+        }
+        switch (side) {
+            case PLAYER:
+                return "Returns 98.6% over time";
+            case BANKER:
+                return "Returns 98.9% over time";
+            default:
+                return "Returns 85.6% over time";
+        }
     }
 
     // ---------------------------------------------------------------------------------------------

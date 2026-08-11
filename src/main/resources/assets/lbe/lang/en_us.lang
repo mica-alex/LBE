@@ -32,6 +32,7 @@ tile.lbe.high_low_machine.name=High-Low Machine
 tile.lbe.roulette_table.name=Roulette Table
 tile.lbe.plinko_machine.name=Plinko Machine
 tile.lbe.keno_machine.name=Keno Machine
+tile.lbe.baccarat_table.name=Baccarat Table
 lbe.casino.title=Lucky Bucks
 lbe.casino.spin=Spin
 lbe.casino.spinning=Spinning...
