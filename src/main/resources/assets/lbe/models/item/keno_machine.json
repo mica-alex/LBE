@@ -1,0 +1,31 @@
+{
+  "parent": "block/cube",
+  "textures": {
+    "particle": "lbe:blocks/keno_machine_upper_front",
+    "north": "lbe:blocks/keno_machine_upper_front",
+    "south": "lbe:blocks/keno_machine_upper_side",
+    "east": "lbe:blocks/keno_machine_upper_side",
+    "west": "lbe:blocks/keno_machine_upper_side",
+    "up": "lbe:blocks/keno_machine_top",
+    "down": "lbe:blocks/keno_machine_bottom"
+  },
+  "display": {
+    "gui": {
+      "rotation": [
+        30,
+        225,
+        0
+      ],
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.625,
+        0.625,
+        0.625
+      ]
+    }
+  }
+}

@@ -1,42 +1,63 @@
 package com.micatechnologies.minecraft.lbe.casino.block;
 
 import com.micatechnologies.minecraft.lbe.LbeRegistry;
+import com.micatechnologies.minecraft.lbe.casino.CasinoGame;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.Map;
 import net.minecraft.block.Block;
 import net.minecraft.item.ItemBlock;
 
 /**
- * The casino's blocks, created in {@code preInit} and handed to {@link LbeRegistry}.
- *
- * <p>One so far. The list is expected to grow — a table per game — which is why this is a holder
- * rather than a line in the main mod class.
+ * The casino's blocks: one {@link BlockCasinoMachine} per {@link CasinoGame}, created in
+ * {@code preInit} and handed to {@link LbeRegistry}.
  *
  * <p>These register unconditionally, whether or not SUM is installed. A block that exists only on
- * some servers is a block that turns into a missing-texture cube when a world moves between them,
- * taking the player's build with it. The machines are always here; whether they take money is a
- * question asked when somebody uses one.
+ * some servers turns into a missing-model cube when a world moves between them, taking somebody's
+ * build with it. The machines are always here; whether they take money is a question asked when
+ * somebody uses one.
  */
 public final class CasinoBlocks {
 
-    private static BlockSlotMachine slotMachine;
-    private static ItemBlock slotMachineItem;
+    private static final Map<CasinoGame, BlockCasinoMachine> MACHINES =
+        new EnumMap<>(CasinoGame.class);
+
+    /**
+     * The item form of each machine, kept alongside the block.
+     *
+     * <p>Held rather than looked up with {@code Item.getItemFromBlock} because that lookup goes
+     * through the block-to-item registry mapping, which does not exist yet: the
+     * {@code RegistryEvent.Register} events fire after every mod's {@code preInit}, and this map is
+     * populated during it.
+     */
+    private static final Map<CasinoGame, ItemBlock> MACHINE_ITEMS =
+        new EnumMap<>(CasinoGame.class);
 
     private CasinoBlocks() {
         throw new AssertionError("No instances.");
     }
 
     public static void init() {
-        slotMachine = LbeRegistry.addBlock(new BlockSlotMachine());
-        slotMachineItem = registerItemBlock(slotMachine);
+        for (CasinoGame game : CasinoGame.values()) {
+            BlockCasinoMachine block = LbeRegistry.addBlock(new BlockCasinoMachine(game));
+            MACHINES.put(game, block);
+            MACHINE_ITEMS.put(game, registerItemBlock(block));
+        }
     }
 
-    /** The slot machine block. Null before {@link #init()}. */
-    public static BlockSlotMachine slotMachine() {
-        return slotMachine;
+    /** The machine for a game. Null before {@link #init()}. */
+    public static BlockCasinoMachine machine(CasinoGame game) {
+        return MACHINES.get(game);
     }
 
-    /** The slot machine's item form. Null before {@link #init()}. */
-    public static ItemBlock slotMachineItem() {
-        return slotMachineItem;
+    /** The machine's item form. Null before {@link #init()}. */
+    public static ItemBlock machineItem(CasinoGame game) {
+        return MACHINE_ITEMS.get(game);
+    }
+
+    /** Every machine item, for model binding. */
+    public static Map<CasinoGame, ItemBlock> machineItems() {
+        return Collections.unmodifiableMap(MACHINE_ITEMS);
     }
 
     private static ItemBlock registerItemBlock(Block block) {

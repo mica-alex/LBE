@@ -31,18 +31,19 @@ public interface LbeProxy {
                        java.util.List<net.minecraft.item.ItemStack> contents);
 
     /**
-     * Show the slot-machine screen for the machine at {@code pos}. A no-op on the server.
+     * Show the screen for the casino machine at {@code pos}. A no-op on the server.
      *
-     * <p>Opening the screen places no bet and moves no money — it is a window with a button in it.
-     * The bet happens when the player presses that button, and is decided entirely server-side.
+     * <p>Opening a screen places no bet and moves no money — it is a window with buttons in it. The
+     * bet happens when one is pressed, and is decided entirely server-side.
      */
-    void openSlotMachineGui(net.minecraft.util.math.BlockPos pos);
+    void openCasinoGui(net.minecraft.util.math.BlockPos pos,
+                       com.micatechnologies.minecraft.lbe.casino.CasinoGame game);
 
     /**
-     * A spin result, or an opening balance, has arrived from the server. A no-op on the server.
+     * A game result, a deal, or an opening balance has arrived. A no-op on the server.
      *
      * <p>The money already moved before this was sent. A client that never receives it, or throws
      * handling it, has lost an animation and nothing else.
      */
-    void onSlotResult(com.micatechnologies.minecraft.lbe.network.PacketSlotResult result);
+    void onCasinoResult(com.micatechnologies.minecraft.lbe.network.PacketCasinoResult result);
 }

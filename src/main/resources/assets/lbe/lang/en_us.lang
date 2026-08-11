@@ -26,6 +26,12 @@ lbe.command.rarity.nothing_held=Hold an item, or name one: /lbe rarity <modid:na
 
 # The casino
 tile.lbe.slot_machine.name=Slot Machine
+tile.lbe.coin_flip_table.name=Coin Flip Table
+tile.lbe.war_table.name=Casino War Table
+tile.lbe.high_low_machine.name=High-Low Machine
+tile.lbe.roulette_table.name=Roulette Table
+tile.lbe.plinko_machine.name=Plinko Machine
+tile.lbe.keno_machine.name=Keno Machine
 lbe.casino.title=Lucky Bucks
 lbe.casino.spin=Spin
 lbe.casino.spinning=Spinning...

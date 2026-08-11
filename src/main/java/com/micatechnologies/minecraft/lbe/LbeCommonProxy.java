@@ -35,12 +35,13 @@ public class LbeCommonProxy implements LbeProxy {
      * which is what keeps a {@code net.minecraft.client} import out of common code.
      */
     @Override
-    public void openSlotMachineGui(net.minecraft.util.math.BlockPos pos) {
+    public void openCasinoGui(net.minecraft.util.math.BlockPos pos,
+                              com.micatechnologies.minecraft.lbe.casino.CasinoGame game) {
     }
 
     /** No-op: a dedicated server never receives its own result packet. */
     @Override
-    public void onSlotResult(
-        com.micatechnologies.minecraft.lbe.network.PacketSlotResult result) {
+    public void onCasinoResult(
+        com.micatechnologies.minecraft.lbe.network.PacketCasinoResult result) {
     }
 }

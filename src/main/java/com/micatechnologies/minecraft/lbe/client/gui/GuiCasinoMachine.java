@@ -1,0 +1,638 @@
+package com.micatechnologies.minecraft.lbe.client.gui;
+
+import com.micatechnologies.minecraft.lbe.LbeConfig;
+import com.micatechnologies.minecraft.lbe.LbeConstants;
+import com.micatechnologies.minecraft.lbe.casino.CasinoGame;
+import com.micatechnologies.minecraft.lbe.casino.block.TileEntityCasinoMachine;
+import com.micatechnologies.minecraft.lbe.casino.cards.Card;
+import com.micatechnologies.minecraft.lbe.casino.highlow.HighLowGame;
+import com.micatechnologies.minecraft.lbe.casino.keno.KenoGame;
+import com.micatechnologies.minecraft.lbe.casino.plinko.PlinkoGame;
+import com.micatechnologies.minecraft.lbe.casino.roulette.RouletteGame;
+import com.micatechnologies.minecraft.lbe.casino.slots.SlotPaytable;
+import com.micatechnologies.minecraft.lbe.casino.slots.SlotSymbol;
+import com.micatechnologies.minecraft.lbe.network.LbeNetwork;
+import com.micatechnologies.minecraft.lbe.network.PacketCasinoPlay;
+import com.micatechnologies.minecraft.lbe.network.PacketCasinoResult;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Random;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import javax.annotation.Nullable;
+import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.text.TextFormatting;
+
+/**
+ * One screen for every casino game.
+ *
+ * <p><b>This screen decides nothing.</b> It sends a bet and some choices, and draws whatever comes
+ * back. Any animation it plays during the wait is cosmetic — the real outcome arrives in a
+ * {@link PacketCasinoResult} and the drawing is steered onto it. A client that tampers with anything
+ * here changes what one person sees and not one cent of what they are paid.
+ *
+ * <p>The games differ only in their <b>options</b> — the buttons above the bet — and their
+ * <b>reveal</b>, the little picture of the outcome. Both are switched on {@link CasinoGame} in one
+ * place each, so a new game is two short branches rather than a new screen.
+ *
+ * <p>Not a {@code GuiContainer}: there is no inventory involved, so there is no container. That is
+ * also why {@code BlockCasinoMachine#onBlockActivated} must not guard on {@code world.isRemote} —
+ * with no container to open server-side, the client is the side that opens this window.
+ */
+public class GuiCasinoMachine extends GuiScreen {
+
+    private static final ResourceLocation SYMBOLS = new ResourceLocation(
+        LbeConstants.MOD_NAMESPACE, "textures/gui/slot_symbols.png");
+
+    private static final int TILE = 32;
+    private static final int PANEL_WIDTH = 248;
+    private static final int PANEL_HEIGHT = 186;
+
+    /** Ticks each slot reel keeps spinning. Staggered, so they land 1-2-3. */
+    private static final int[] REEL_STOP_TICKS = {24, 34, 44};
+
+    /** How long any game's reveal animation runs before it must settle. */
+    private static final int ANIMATION_TICKS = 44;
+
+    /** After this long with no answer, stop animating: the bet was refused or the packet was lost. */
+    private static final int GIVE_UP_TICKS = 200;
+
+    private static final int ID_PLAY = 0;
+    private static final int ID_BET_DOWN = 1;
+    private static final int ID_BET_UP = 2;
+    private static final int ID_OPTION_BASE = 10;
+
+    private final BlockPos pos;
+    private final CasinoGame game;
+    private final Random cosmetic = new Random();
+
+    private double bet;
+    private double balance = PacketCasinoResult.UNKNOWN_BALANCE;
+    private double pendingBalance = PacketCasinoResult.UNKNOWN_BALANCE;
+
+    /** The options this game offers, built once in {@link #initGui}. */
+    private final List<Option> options = new ArrayList<>();
+    private int selectedOption;
+
+    /** Keno only: which numbers are ticked. */
+    private final SortedSet<Integer> picks = new TreeSet<>();
+
+    /** Set while a two-step game has money down and is waiting for the player's second choice. */
+    private boolean awaitingChoice;
+
+    @Nullable
+    private PacketCasinoResult pending;
+    @Nullable
+    private PacketCasinoResult settled;
+
+    private boolean animating;
+    private int animationTicks;
+    private String status = "";
+
+    private GuiButton playButton;
+
+    public GuiCasinoMachine(BlockPos pos, CasinoGame game) {
+        this.pos = pos;
+        this.game = game;
+        this.bet = LbeConfig.minimumBet;
+    }
+
+    /** One choice a player can make before betting: a coin side, a roulette bet, a risk level. */
+    private static final class Option {
+        final String label;
+        final int valueA;
+        final int valueB;
+
+        Option(String label, int valueA, int valueB) {
+            this.label = label;
+            this.valueA = valueA;
+            this.valueB = valueB;
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Layout
+    // ---------------------------------------------------------------------------------------------
+
+    @Override
+    public void initGui() {
+        buttonList.clear();
+        options.clear();
+        buildOptions();
+        if (selectedOption >= options.size()) {
+            selectedOption = 0;
+        }
+
+        int left = (width - PANEL_WIDTH) / 2;
+        int top = (height - PANEL_HEIGHT) / 2;
+
+        // Option buttons, wrapped into rows of four.
+        int optionTop = top + PANEL_HEIGHT - 74;
+        for (int i = 0; i < options.size(); i++) {
+            int column = i % 4;
+            int row = i / 4;
+            buttonList.add(new GuiButton(ID_OPTION_BASE + i,
+                left + 10 + column * 58, optionTop + row * 22, 56, 20, options.get(i).label));
+        }
+
+        buttonList.add(new GuiButton(ID_BET_DOWN, left + 10, top + PANEL_HEIGHT - 28, 20, 20, "-"));
+        buttonList.add(new GuiButton(ID_BET_UP, left + 34, top + PANEL_HEIGHT - 28, 20, 20, "+"));
+        playButton = new GuiButton(ID_PLAY, left + 62, top + PANEL_HEIGHT - 28, 176, 20, "Play");
+        buttonList.add(playButton);
+    }
+
+    /** The choices this game offers. Empty for a game with nothing to choose. */
+    private void buildOptions() {
+        switch (game) {
+            case COIN_FLIP:
+                options.add(new Option("Heads", 0, 0));
+                options.add(new Option("Tails", 1, 0));
+                break;
+            case HIGH_LOW:
+                // Filled in once a base card has been dealt — until then there is nothing to price.
+                if (awaitingChoice && settledBase() != null) {
+                    Card base = settledBase();
+                    options.add(new Option("Higher "
+                        + money(HighLowGame.payoutFor(base, HighLowGame.Call.HIGHER)) + "x", 0, 0));
+                    options.add(new Option("Lower "
+                        + money(HighLowGame.payoutFor(base, HighLowGame.Call.LOWER)) + "x", 1, 0));
+                }
+                break;
+            case ROULETTE:
+                options.add(new Option("Red", RouletteGame.BetType.RED.ordinal(), 0));
+                options.add(new Option("Black", RouletteGame.BetType.BLACK.ordinal(), 0));
+                options.add(new Option("Even", RouletteGame.BetType.EVEN.ordinal(), 0));
+                options.add(new Option("Odd", RouletteGame.BetType.ODD.ordinal(), 0));
+                options.add(new Option("1-18", RouletteGame.BetType.LOW.ordinal(), 0));
+                options.add(new Option("19-36", RouletteGame.BetType.HIGH.ordinal(), 0));
+                for (int dozen = 1; dozen <= 3; dozen++) {
+                    options.add(new Option("Dz " + dozen,
+                        RouletteGame.BetType.DOZEN.ordinal(), dozen));
+                }
+                break;
+            case PLINKO:
+                for (PlinkoGame.Risk risk : PlinkoGame.Risk.values()) {
+                    options.add(new Option(risk.name().charAt(0)
+                        + risk.name().substring(1).toLowerCase(Locale.ROOT),
+                        risk.ordinal(), 0));
+                }
+                break;
+            case KENO:
+                options.add(new Option("Quick pick", 0, 0));
+                options.add(new Option("Clear", 1, 0));
+                break;
+            default:
+                break;   // slots and war have nothing to choose
+        }
+    }
+
+    @Override
+    public boolean doesGuiPauseGame() {
+        return false;
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Server messages
+    // ---------------------------------------------------------------------------------------------
+
+    /** A balance, a deal, or a finished game arrived. Called on the client thread. */
+    public void accept(PacketCasinoResult message) {
+        status = message.message();
+        switch (message.stage()) {
+            case BALANCE:
+                balance = message.balance();
+                return;
+            case DEALT:
+                // Money is down and something has been dealt, but nothing is decided. Show it
+                // immediately: the player has to see the card before they can call it.
+                balance = message.balance();
+                settled = message;
+                awaitingChoice = true;
+                animating = false;
+                selectedOption = 0;
+                initGui();
+                return;
+            case SETTLED:
+            default:
+                pending = message;
+                // The balance is deliberately held back until the reveal finishes — applying it now
+                // would show the player the outcome up to two seconds before the animation does.
+                pendingBalance = message.balance();
+                awaitingChoice = false;
+                if (!animating) {
+                    settle();
+                }
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Input
+    // ---------------------------------------------------------------------------------------------
+
+    @Override
+    protected void actionPerformed(GuiButton button) throws IOException {
+        if (button.id == ID_PLAY) {
+            play();
+        } else if (button.id == ID_BET_UP) {
+            bet = clampBet(nextStep(bet, true));
+        } else if (button.id == ID_BET_DOWN) {
+            bet = clampBet(nextStep(bet, false));
+        } else if (button.id >= ID_OPTION_BASE) {
+            chooseOption(button.id - ID_OPTION_BASE);
+        } else {
+            super.actionPerformed(button);
+        }
+    }
+
+    private void chooseOption(int index) {
+        if (index < 0 || index >= options.size()) {
+            return;
+        }
+        if (game == CasinoGame.KENO) {
+            // Keno's two buttons are actions, not a selection.
+            picks.clear();
+            if (index == 0) {
+                Random random = new Random();
+                while (picks.size() < 5) {
+                    picks.add(1 + random.nextInt(KenoGame.BOARD_SIZE));
+                }
+            }
+            return;
+        }
+        selectedOption = index;
+        if (awaitingChoice) {
+            // A two-step game: choosing IS the second half of the play, and the money is already
+            // down, so send it rather than waiting for the Play button.
+            sendPlay(0.0);
+            awaitingChoice = false;
+            animating = true;
+            animationTicks = 0;
+        }
+    }
+
+    private void play() {
+        if (animating || awaitingChoice) {
+            return;
+        }
+        if (game == CasinoGame.KENO && picks.isEmpty()) {
+            status = "Pick some numbers first.";
+            return;
+        }
+        pending = null;
+        settled = null;
+        animating = true;
+        animationTicks = 0;
+        status = "";
+        sendPlay(bet);
+    }
+
+    private void sendPlay(double amount) {
+        Option option = options.isEmpty() || selectedOption >= options.size()
+            ? null : options.get(selectedOption);
+        int optionA = option == null ? 0 : option.valueA;
+        int optionB = option == null ? 0 : option.valueB;
+        int[] numbers = new int[picks.size()];
+        int i = 0;
+        for (int pick : picks) {
+            numbers[i++] = pick;
+        }
+        LbeNetwork.CHANNEL.sendToServer(
+            new PacketCasinoPlay(pos, amount, optionA, optionB, numbers));
+    }
+
+    /** Bet steps that feel like a casino: 1, 5, 10, 25, 50, 100, then round hundreds. */
+    private static double nextStep(double current, boolean up) {
+        double[] steps = {1, 5, 10, 25, 50, 100, 250, 500, 1000};
+        if (up) {
+            for (double step : steps) {
+                if (step > current + 1.0e-9) {
+                    return step;
+                }
+            }
+            return current * 2.0;
+        }
+        for (int i = steps.length - 1; i >= 0; i--) {
+            if (steps[i] < current - 1.0e-9) {
+                return steps[i];
+            }
+        }
+        return LbeConfig.minimumBet;
+    }
+
+    private static double clampBet(double value) {
+        return Math.max(LbeConfig.minimumBet, Math.min(LbeConfig.maximumBet, value));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Animation
+    // ---------------------------------------------------------------------------------------------
+
+    @Override
+    public void updateScreen() {
+        if (!animating) {
+            return;
+        }
+        animationTicks++;
+        if (animationTicks >= ANIMATION_TICKS && pending != null) {
+            settle();
+        } else if (animationTicks > GIVE_UP_TICKS) {
+            // The server never answered — a refused bet, a dropped packet, a disconnect. Stop
+            // rather than animating forever; the reason went to chat.
+            animating = false;
+            if (pendingBalance != PacketCasinoResult.UNKNOWN_BALANCE) {
+                balance = pendingBalance;
+                pendingBalance = PacketCasinoResult.UNKNOWN_BALANCE;
+            }
+        }
+    }
+
+    private void settle() {
+        if (pending == null) {
+            return;
+        }
+        settled = pending;
+        status = pending.message();
+        pending = null;
+        animating = false;
+        // Now, with the reveal. The money moved seconds ago; this is when the player learns of it.
+        balance = pendingBalance;
+        pendingBalance = PacketCasinoResult.UNKNOWN_BALANCE;
+        if (game == CasinoGame.HIGH_LOW) {
+            initGui();   // drop the Higher/Lower buttons until another hand is dealt
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Drawing
+    // ---------------------------------------------------------------------------------------------
+
+    @Override
+    public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        drawDefaultBackground();
+        int left = (width - PANEL_WIDTH) / 2;
+        int top = (height - PANEL_HEIGHT) / 2;
+
+        drawRect(left, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xF0100A18);
+        drawRect(left, top, left + PANEL_WIDTH, top + 1, 0xFFF0A81E);
+        drawRect(left, top + PANEL_HEIGHT - 1, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xFFF0A81E);
+
+        drawCenteredString(fontRenderer, TextFormatting.GOLD + game.displayName(),
+            width / 2, top + 8, 0xFFFFFF);
+
+        drawReveal(left, top + 24);
+        drawStatus(left, top);
+
+        if (playButton != null) {
+            playButton.enabled = !animating && !awaitingChoice;
+            playButton.displayString = animating ? "..."
+                : awaitingChoice ? "Choose above"
+                : "Play " + LbeEconomyFormat(bet);
+        }
+        // Highlight the chosen option, since vanilla buttons have no selected state.
+        for (GuiButton button : buttonList) {
+            if (button.id >= ID_OPTION_BASE) {
+                boolean chosen = button.id - ID_OPTION_BASE == selectedOption
+                    && game != CasinoGame.KENO;
+                button.packedFGColour = chosen ? 0xFFD54F : 0;
+            }
+        }
+        super.drawScreen(mouseX, mouseY, partialTicks);
+    }
+
+    /** The picture of the outcome. One branch per game, and the only game-specific drawing here. */
+    private void drawReveal(int left, int top) {
+        int centre = width / 2;
+        switch (game) {
+            case SLOTS:
+                drawSlotReels(left, top);
+                break;
+            case COIN_FLIP:
+                drawBigText(centre, top + 12, animating ? "?"
+                    : settled == null ? "—" : settled.reveal(0, 0) == 0 ? "HEADS" : "TAILS");
+                break;
+            case WAR:
+            case HIGH_LOW:
+                drawCards(centre, top);
+                break;
+            case ROULETTE:
+                drawRoulette(centre, top);
+                break;
+            case PLINKO:
+                drawPlinko(centre, top);
+                break;
+            case KENO:
+                drawKeno(left, top);
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void drawSlotReels(int left, int top) {
+        int windowWidth = TILE * 3 + 16;
+        int windowLeft = left + (PANEL_WIDTH - windowWidth) / 2;
+        drawRect(windowLeft - 2, top - 2, windowLeft + windowWidth + 2, top + TILE + 2, 0xFF3A2A18);
+        drawRect(windowLeft, top, windowLeft + windowWidth, top + TILE, 0xFF120C08);
+
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        mc.getTextureManager().bindTexture(SYMBOLS);
+        for (int reel = 0; reel < 3; reel++) {
+            SlotSymbol symbol;
+            if (animating && animationTicks < REEL_STOP_TICKS[reel]) {
+                // Free-running blur: deliberately NOT the weighted distribution, because a blur has
+                // no odds and drawing from the real table would invite reading it for information
+                // it does not carry.
+                symbol = SlotSymbol.byIndex(cosmetic.nextInt(SlotSymbol.values().length));
+            } else if (settled != null) {
+                symbol = SlotSymbol.byIndex(settled.reveal(reel, 0));
+            } else {
+                symbol = SlotSymbol.byIndex(reel);
+            }
+            drawModalRectWithCustomSizedTexture(windowLeft + 4 + reel * (TILE + 4), top,
+                0, symbol.index() * TILE, TILE, TILE, TILE, TILE * SlotSymbol.values().length);
+        }
+    }
+
+    private void drawCards(int centre, int top) {
+        String left;
+        String right;
+        if (settled == null) {
+            left = "?";
+            right = "?";
+        } else if (game == CasinoGame.HIGH_LOW && settled.stage()
+                == PacketCasinoResult.Stage.DEALT) {
+            left = TileEntityCasinoMachine.cardFromId(settled.reveal(0, 0)).toString();
+            right = "?";
+        } else {
+            left = TileEntityCasinoMachine.cardFromId(settled.reveal(0, 0)).toString();
+            right = animating ? "?"
+                : TileEntityCasinoMachine.cardFromId(settled.reveal(1, 0)).toString();
+        }
+        drawBigText(centre - 40, top + 12, left);
+        drawBigText(centre + 40, top + 12, right);
+        String labels = game == CasinoGame.WAR ? "you            dealer" : "shown           next";
+        drawCenteredString(fontRenderer, labels, centre, top + 40, 0x707080);
+    }
+
+    private void drawRoulette(int centre, int top) {
+        String text;
+        int colour = 0xFFFFFF;
+        if (settled == null || animating) {
+            text = animating ? String.valueOf(cosmetic.nextInt(RouletteGame.POCKETS)) : "—";
+            colour = 0x909090;
+        } else {
+            int pocket = settled.reveal(0, 0);
+            text = String.valueOf(pocket);
+            RouletteGame.Colour pocketColour = RouletteGame.colourOf(pocket);
+            colour = pocketColour == RouletteGame.Colour.RED ? 0xD83A3A
+                : pocketColour == RouletteGame.Colour.GREEN ? 0x4FC045 : 0xC0C0C8;
+        }
+        drawBigText(centre, top + 12, text, colour);
+    }
+
+    private void drawPlinko(int centre, int top) {
+        // Nine slots along the bottom, the landing one lit.
+        int slotWidth = 20;
+        int totalWidth = slotWidth * (PlinkoGame.ROWS + 1);
+        int slotsLeft = centre - totalWidth / 2;
+        int landed = settled == null || animating ? -1 : settled.reveal(PlinkoGame.ROWS, -1);
+        PlinkoGame.Risk risk = PlinkoGame.Risk.values()[
+            Math.min(selectedOption, PlinkoGame.Risk.values().length - 1)];
+        for (int slot = 0; slot <= PlinkoGame.ROWS; slot++) {
+            int x = slotsLeft + slot * slotWidth;
+            boolean hit = slot == landed;
+            drawRect(x + 1, top + 22, x + slotWidth - 1, top + 40, hit ? 0xFFF0A81E : 0xFF241A30);
+            String label = trimTrailingZero(risk.multiplierFor(slot));
+            drawCenteredString(fontRenderer, label, x + slotWidth / 2, top + 27,
+                hit ? 0x201000 : 0x9090A0);
+        }
+        if (animating) {
+            // The ball, falling: cosmetic, and it lands wherever the server said.
+            int row = Math.min(PlinkoGame.ROWS, animationTicks * PlinkoGame.ROWS / ANIMATION_TICKS);
+            drawCenteredString(fontRenderer, "o", centre, top + row * 2, 0xFFFFFF);
+        }
+    }
+
+    private void drawKeno(int left, int top) {
+        // A 10x8 board. Ticked numbers are gold; drawn ones outlined; hits are both.
+        int cell = 14;
+        int boardLeft = left + (PANEL_WIDTH - cell * 10) / 2;
+        SortedSet<Integer> drawn = new TreeSet<>();
+        if (settled != null && !animating) {
+            for (int value : settled.reveal()) {
+                drawn.add(value);
+            }
+        }
+        for (int number = 1; number <= KenoGame.BOARD_SIZE; number++) {
+            int column = (number - 1) % 10;
+            int row = (number - 1) / 10;
+            int x = boardLeft + column * cell;
+            int y = top + row * (cell - 3);
+            boolean picked = picks.contains(number);
+            boolean hit = drawn.contains(number);
+            int background = hit && picked ? 0xFFF0A81E : hit ? 0xFF3F6E8C
+                : picked ? 0xFF6A4A16 : 0xFF1A1424;
+            drawRect(x, y, x + cell - 1, y + cell - 4, background);
+            drawCenteredString(fontRenderer, String.valueOf(number), x + cell / 2 - 1, y + 1,
+                hit && picked ? 0x201000 : 0xB0B0C0);
+        }
+    }
+
+    private void drawStatus(int left, int top) {
+        int textTop = top + PANEL_HEIGHT - 96;
+        String balanceText = balance == PacketCasinoResult.UNKNOWN_BALANCE
+            ? "Balance: —" : "Balance: " + LbeEconomyFormat(balance);
+        drawCenteredString(fontRenderer, balanceText, width / 2, textTop, 0xB0B0C0);
+
+        int colour = 0x909090;
+        if (settled != null && settled.multiplier() > 1.0) {
+            colour = settled.multiplier() >= 50.0 ? 0xFFD54F : 0x7BE86C;
+        }
+        String line = animating ? "Good luck…" : status;
+        drawCenteredString(fontRenderer, line, width / 2, textTop + 11, colour);
+
+        // The honest number. A machine that hides its edge is a machine with something to hide.
+        drawCenteredString(fontRenderer, returnLine(), width / 2, top + PANEL_HEIGHT - 42,
+            0x606070);
+    }
+
+    /** What this game returns over time, stated plainly. */
+    private String returnLine() {
+        double rtp;
+        switch (game) {
+            case SLOTS:
+                rtp = SlotPaytable.returnToPlayer();
+                break;
+            case COIN_FLIP:
+                rtp = com.micatechnologies.minecraft.lbe.casino.coinflip.CoinFlipGame
+                    .returnToPlayer();
+                break;
+            case WAR:
+                rtp = com.micatechnologies.minecraft.lbe.casino.war.WarGame.returnToPlayer();
+                break;
+            case HIGH_LOW:
+                rtp = HighLowGame.worstReturnToPlayer();
+                break;
+            case ROULETTE:
+                rtp = RouletteGame.returnToPlayer(RouletteGame.BetType.RED);
+                break;
+            case PLINKO:
+                rtp = PlinkoGame.returnToPlayer(PlinkoGame.Risk.values()[
+                    Math.min(selectedOption, PlinkoGame.Risk.values().length - 1)]);
+                break;
+            case KENO:
+                rtp = KenoGame.returnToPlayer(Math.max(1, picks.size()));
+                break;
+            default:
+                return "";
+        }
+        return String.format(Locale.ROOT, "Returns %.1f%% over time", rtp * 100.0);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Small helpers
+    // ---------------------------------------------------------------------------------------------
+
+    @Nullable
+    private Card settledBase() {
+        return settled == null ? null
+            : TileEntityCasinoMachine.cardFromId(settled.reveal(0, 0));
+    }
+
+    private void drawBigText(int centreX, int y, String text) {
+        drawBigText(centreX, y, text, 0xFFFFFF);
+    }
+
+    private void drawBigText(int centreX, int y, String text, int colour) {
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(centreX, y, 0);
+        GlStateManager.scale(2.0F, 2.0F, 1.0F);
+        drawCenteredString(fontRenderer, text, 0, 0, colour);
+        GlStateManager.popMatrix();
+    }
+
+    private static String trimTrailingZero(double value) {
+        return value == Math.floor(value) ? String.valueOf((long) value)
+            : String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    private static String money(double amount) {
+        return String.format(Locale.ROOT, "%.2f", amount);
+    }
+
+    /**
+     * Formats an amount with the server's currency symbol.
+     *
+     * <p>Goes through the economy rather than hard-coding a dollar sign, so a server running a
+     * remote economy with its own symbol shows that symbol here too.
+     */
+    private static String LbeEconomyFormat(double amount) {
+        return com.micatechnologies.minecraft.lbe.casino.economy.LbeEconomy.format(amount);
+    }
+}

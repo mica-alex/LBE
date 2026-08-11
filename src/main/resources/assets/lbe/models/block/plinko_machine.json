@@ -1,0 +1,41 @@
+{
+  "__comment": "Inset so a row of machines reads as separate units. No cullface: this is not a full cube, and claiming otherwise lets neighbours cull faces that are visible.",
+  "parent": "block/block",
+  "textures": {
+    "particle": "#front"
+  },
+  "elements": [
+    {
+      "from": [
+        1,
+        0,
+        1
+      ],
+      "to": [
+        15,
+        16,
+        15
+      ],
+      "faces": {
+        "north": {
+          "texture": "#front"
+        },
+        "south": {
+          "texture": "#side"
+        },
+        "west": {
+          "texture": "#side"
+        },
+        "east": {
+          "texture": "#side"
+        },
+        "up": {
+          "texture": "#top"
+        },
+        "down": {
+          "texture": "#bottom"
+        }
+      }
+    }
+  ]
+}

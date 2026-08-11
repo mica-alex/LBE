@@ -49,32 +49,33 @@ public class LbeClientProxy extends LbeCommonProxy {
     }
 
     /**
-     * Show the slot-machine screen.
+     * Show a casino machine's screen.
      *
      * <p>Scheduled onto the client thread for the same reason the reveal screen is: this can be
      * reached from a network handler, and swapping the active screen off-thread races the renderer.
      */
     @Override
-    public void openSlotMachineGui(net.minecraft.util.math.BlockPos pos) {
+    public void openCasinoGui(net.minecraft.util.math.BlockPos pos,
+                              com.micatechnologies.minecraft.lbe.casino.CasinoGame game) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
         mc.addScheduledTask(() -> mc.displayGuiScreen(
-            new com.micatechnologies.minecraft.lbe.client.gui.GuiSlotMachine(pos)));
+            new com.micatechnologies.minecraft.lbe.client.gui.GuiCasinoMachine(pos, game)));
     }
 
     /**
-     * Hand a spin result to the open slot-machine screen, if one is open.
+     * Hand a result to the open casino screen, if one is open.
      *
      * <p>Dropped when it is not. The money has already moved server-side, so a result nobody is
      * looking at is an animation nobody needed — never a lost payout.
      */
     @Override
-    public void onSlotResult(
-        com.micatechnologies.minecraft.lbe.network.PacketSlotResult result) {
+    public void onCasinoResult(
+        com.micatechnologies.minecraft.lbe.network.PacketCasinoResult result) {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
         mc.addScheduledTask(() -> {
             if (mc.currentScreen
-                    instanceof com.micatechnologies.minecraft.lbe.client.gui.GuiSlotMachine) {
-                ((com.micatechnologies.minecraft.lbe.client.gui.GuiSlotMachine) mc.currentScreen)
+                    instanceof com.micatechnologies.minecraft.lbe.client.gui.GuiCasinoMachine) {
+                ((com.micatechnologies.minecraft.lbe.client.gui.GuiCasinoMachine) mc.currentScreen)
                     .accept(result);
             }
         });
@@ -89,7 +90,11 @@ public class LbeClientProxy extends LbeCommonProxy {
         for (Rarity rarity : Rarity.values()) {
             bindModel(LbeBlocks.boxItem(rarity));
         }
-        bindModel(com.micatechnologies.minecraft.lbe.casino.block.CasinoBlocks.slotMachineItem());
+        for (net.minecraft.item.Item machine
+                : com.micatechnologies.minecraft.lbe.casino.block.CasinoBlocks.machineItems()
+                    .values()) {
+            bindModel(machine);
+        }
     }
 
     private static void bindModel(Item item) {

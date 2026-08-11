@@ -1,5 +1,6 @@
 package com.micatechnologies.minecraft.lbe.casino.slots;
 
+import com.micatechnologies.minecraft.lbe.casino.GameResult;
 import java.util.Arrays;
 import java.util.Random;
 
@@ -15,7 +16,7 @@ import java.util.Random;
  * one, because a reel that stops wherever the client decides is a machine that pays whatever the
  * client decides.
  */
-public final class SlotSpin {
+public final class SlotSpin implements GameResult {
 
     private final SlotSymbol[] reels;
     private final int multiplier;
@@ -69,7 +70,27 @@ public final class SlotSpin {
         return multiplier;
     }
 
+    /**
+     * The same figure as {@link #multiplier()}, as the shared settlement path wants it.
+     *
+     * <p>Slots have no push — every outcome is a win or a total loss — so this is only ever 0 or
+     * well above 1.
+     */
+    @Override
+    public double totalReturnMultiplier() {
+        return multiplier;
+    }
+
+    @Override
+    public String describe() {
+        if (isJackpot()) {
+            return "JACKPOT — three sevens!";
+        }
+        return isWin() ? "Pays " + multiplier + "x" : "No luck.";
+    }
+
     /** True when the player gets anything back. */
+    @Override
     public boolean isWin() {
         return multiplier > 0;
     }

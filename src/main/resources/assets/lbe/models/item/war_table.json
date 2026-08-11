@@ -1,0 +1,31 @@
+{
+  "parent": "block/cube",
+  "textures": {
+    "particle": "lbe:blocks/war_table_front",
+    "north": "lbe:blocks/war_table_front",
+    "south": "lbe:blocks/war_table_side",
+    "east": "lbe:blocks/war_table_side",
+    "west": "lbe:blocks/war_table_side",
+    "up": "lbe:blocks/war_table_top",
+    "down": "lbe:blocks/war_table_bottom"
+  },
+  "display": {
+    "gui": {
+      "rotation": [
+        30,
+        225,
+        0
+      ],
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.625,
+        0.625,
+        0.625
+      ]
+    }
+  }
+}

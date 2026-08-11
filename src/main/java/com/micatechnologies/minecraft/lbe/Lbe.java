@@ -3,7 +3,7 @@ package com.micatechnologies.minecraft.lbe;
 import com.micatechnologies.minecraft.lbe.block.LbeBlocks;
 import com.micatechnologies.minecraft.lbe.block.TileEntityLootBox;
 import com.micatechnologies.minecraft.lbe.casino.block.CasinoBlocks;
-import com.micatechnologies.minecraft.lbe.casino.block.TileEntitySlotMachine;
+import com.micatechnologies.minecraft.lbe.casino.block.TileEntityCasinoMachine;
 import com.micatechnologies.minecraft.lbe.casino.economy.LbeEconomy;
 import com.micatechnologies.minecraft.lbe.catalog.LootCatalog;
 import com.micatechnologies.minecraft.lbe.command.CommandLbe;
@@ -87,8 +87,10 @@ public class Lbe {
         CasinoBlocks.init();
         GameRegistry.registerTileEntity(TileEntityLootBox.class,
             new ResourceLocation(LbeConstants.MOD_NAMESPACE, "loot_box"));
-        GameRegistry.registerTileEntity(TileEntitySlotMachine.class,
-            new ResourceLocation(LbeConstants.MOD_NAMESPACE, LbeConstants.SLOT_MACHINE_NAME));
+        // One tile entity class for every machine, registered once. The block it sits under is
+        // what decides which game it runs.
+        GameRegistry.registerTileEntity(TileEntityCasinoMachine.class,
+            new ResourceLocation(LbeConstants.MOD_NAMESPACE, "casino_machine"));
         LbeTab.initTabElements();
         // Weight 0 is the middle of the road: LBE has no opinion about running before or after any
         // other generator, because it only ever writes into air that is already there.

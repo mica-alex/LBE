@@ -77,7 +77,7 @@ honours it. It is just not load-bearing.
 Through `CasinoBank`, in three calls:
 
 ```java
-Wager wager = LbeEconomy.bank().stake(player, bet, "slot machine wager");
+Wager wager = LbeEconomy.bank().stake(player, bet, game.displayName() + " wager");
 if (wager == null) {
     tell(player, LbeEconomy.bank().lastFailure());   // already player-safe
     return;
@@ -114,10 +114,14 @@ follows, for the same reason: it makes the interesting part testable in
 milliseconds without a server.
 
 ```
-casino/slots/    SlotSymbol, SlotPaytable, SlotSpin   ← pure. Tested.
-casino/block/    BlockSlotMachine, TileEntitySlotMachine, CasinoBlocks
-client/gui/      GuiSlotMachine
-network/         PacketSlotSpin (C→S), PacketSlotResult (S→C)
+casino/               CasinoGame (the list), GameResult, CasinoOdds
+casino/slots/         pure. Tested. One package per game, likewise:
+casino/coinflip/  casino/war/  casino/highlow/
+casino/roulette/  casino/plinko/  casino/keno/
+casino/cards/         Card, Rank, Suit, Deck — shared by the card games
+casino/block/         BlockCasinoMachine, TileEntityCasinoMachine, CasinoBlocks
+client/gui/           GuiCasinoMachine — one screen, all seven games
+network/              PacketCasinoPlay (C→S), PacketCasinoResult (S→C)
 ```
 
 ### The house edge is a number, not a feeling
@@ -125,7 +129,8 @@ network/         PacketSlotSpin (C→S), PacketSlotResult (S→C)
 Every game must be able to answer *"what fraction of money wagered comes back?"*
 in closed form, and a test must pin it. `SlotPaytable.returnToPlayer()` is the
 model: 0.8404, cross-checked against a million-spin simulation written
-independently of it.
+independently of it. `HouseEdgeTest` holds every game's figure and enforces a
+80–100% band across all of them.
 
 Above 1.0 the game prints money and any player who notices will farm it until the
 server's economy is meaningless. That is not a bug you want to discover from a
@@ -134,53 +139,88 @@ them looks dangerous, and **that** is why the number is a test.
 
 ### The server decides; the client is told
 
-`PacketSlotSpin` carries a position and an amount, and nothing else. No reels, no
-payout, no balance. Everything that decides money is worked out server-side,
+`PacketCasinoPlay` carries a position, an amount and a few option numbers, and
+nothing else. No reels, no cards, no payout, no balance. Everything that decides money is worked out server-side,
 because anything a client sends is a number an attacker chose.
 
 The GUI animates toward a result it was given. A client that tampers with the
 animation changes what one person sees and not one cent of what they are paid.
 
-`PacketSlotSpin` is LBE's **only** client → server message, which makes it the only
-one that has to treat its contents as hostile — position is a real machine, the
-chunk is loaded, the player is within reach, the amount is finite and within limits.
+`PacketCasinoPlay` is LBE's **only** client → server message, which makes it the
+only one that has to treat its contents as hostile — position is a real machine,
+the chunk is loaded, the player is within reach, the amount is finite and within
+limits, and every array length is bounded before anything is allocated.
 
 ### GUI note that costs an afternoon
 
-`BlockSlotMachine.onBlockActivated` **must not** guard on `world.isRemote`. The
+`BlockCasinoMachine.onBlockActivated` **must not** guard on `world.isRemote`. The
 screen is a plain `GuiScreen` with no `Container` behind it, so the client is the
 side that opens the window. Guarding there is the classic 1.12.2 mistake that
 produces a block which does nothing at all.
 
 ---
 
-## Roadmap
+## The games
 
-The Discord bot at `Discord_bot/utils/*_game.py` already has all of these as pure
-Python, complete with tested payout logic. That is the reference: port the maths,
-compute the RTP, pin it in a test, then build a block and a screen around it.
+Seven, all sharing one block class, one tile entity, one screen and one pair of packets. Adding
+another is: pure logic in its own package, a constant in `CasinoGame`, a branch in
+`TileEntityCasinoMachine.resolve`, a branch in `GuiCasinoMachine.drawReveal`, and a motif in
+`tools/gen_casino_textures.py`. Nothing that moves money is touched.
 
-| Game | Bot source | Shape in Minecraft | Notes |
+| Game | Returns | Ported from | Rules changed? |
 |---|---|---|---|
-| **Slots** | `slots_game.py` | ✅ **Done** — 1×2 cabinet | RTP 84.0% |
-| Coin flip | `casino_views/coinflip_view.py` | Small block or item | Simplest possible second game; near 50/50, so the edge has to be deliberate |
-| High-low | `highlow_game.py` | 1×2 cabinet | Streak-based; decide whether a streak can be banked |
-| Wheel | — (`plinko_game.py` is close) | 1×3, wheel on the front | Wants a real animation; good TESR candidate |
-| Roulette | `roulette_game.py` | Table, multi-block | Multi-bet UI is the hard part, not the wheel |
-| Video poker | `video_poker_game.py` | 1×2 cabinet | Hold/draw needs two round trips — first game with real state between packets |
-| Blackjack | `blackjack_game.py` | Table | Dealer logic is well-defined; splits and doubles complicate the wager |
-| Craps | `craps_game.py` | Table, multi-block | Many simultaneous bets; needs a wager *set*, not one `Wager` |
-| Xtreme Hold'em | `xtreme_holdem_game.py` | Table, multiplayer | Player-vs-player. Needs a pot, which escrow already models well |
-| Baccarat, keno, war, mines | `baccarat_game.py`, `keno_game.py`, `war_game.py`, `mines_game.py` | Various | Straight ports |
+| Slots | 84.0% | `slots_game.py` | no |
+| Roulette | 97.3% | `roulette_game.py` | no |
+| Plinko | 91.4–97.6% | `plinko_game.py` | no |
+| Coin flip | 97.0% | `!coinflip` | **yes** — paid 2×, which is exactly break-even |
+| War | 97.2% | `war_game.py` | **yes** — priced the free push |
+| High-low | 96.9–97.3% | `highlow_game.py` | **yes** — odds-weighted; see below |
+| Keno | 91.3–92.5% | `keno_game.py` + `KENO_PAYTABLE` | **yes** — rescaled from 45–75% |
 
-Two things to settle before the multiplayer ones:
+### Why four games needed repricing
 
-- **A pot needs several wagers resolved together.** Escrow handles this — several
-  tickets, released to one winner — but `Wager` is currently one stake with one
-  outcome. It will want a sibling type rather than a hack.
-- **A table with seats needs state that survives a restart.** The slot machine
-  deliberately has none. A hold'em table mid-hand does, and where that lives (tile
-  entity NBT) should be decided once, for all table games, rather than per game.
+The bot's currency is a score. Inflating it costs nobody anything, so a game returning 100% is
+fine there and a game returning 150% is just generous. Against a SUM balance that also buys plots
+and shop goods, neither is.
+
+**High-low was the serious one.** The player saw the base card before choosing, and both directions
+paid the same — so "call the side with more cards left" was always right and always available. On a
+base of 2 that wins 48 times in 51. It returned **150.7%**: $50 a click at the default maximum bet,
+limited only by clicking speed. Not an exploit anyone had to find; the obvious way to play.
+
+Each direction now pays the inverse of its true chance, so **every call on every card returns the
+same 97%**. That is roulette's property, and it is what makes a game a game rather than a lever:
+there is no better side any more, only a safer one and a bolder one. Both multipliers are shown on
+the buttons before the player commits.
+
+Working that through exposed a second problem the even-money rules had hidden: a two or an ace has
+one impossible call and one near-certainty, and honest pricing values that near-certainty *below*
+the stake — calling higher on a two can only pay 0.97×. A hand whose only move is "win and still
+lose three cents" is not a hand, so those eight cards are never dealt as a base.
+
+`HouseEdgeTest` computes all of this in closed form and pins it, and enforces a band: **every game
+must return between 80% and 100%**. A new game cannot join the casino without somebody deciding
+what it costs to play.
+
+## Still to come
+
+| Game | Bot source | What it needs first |
+|---|---|---|
+| Video poker | `video_poker_game.py` | Hold/draw is two round trips against one stake — the same two-step shape high-low uses, so the pattern exists |
+| Blackjack | `blackjack_game.py` | Hit/stand/double/split. Splits turn one wager into several, which `Wager` does not model yet |
+| Craps | `craps_game.py` | Many simultaneous bets across several rolls — needs a wager *set* |
+| Xtreme Hold'em | `xtreme_holdem_game.py` | Player-vs-player. Needs a pot, and a table whose state survives a restart |
+| Baccarat, mines, war variants | various | Straight ports; no new machinery |
+
+Two things to settle before the multiplayer tables:
+
+- **A pot is several wagers resolved together.** SUM's escrow models it well — several tickets
+  released to one winner — but `Wager` is one stake with one outcome. It wants a sibling type, not
+  a hack.
+- **A table mid-hand has state that must survive a restart.** Every machine here is deliberately
+  stateless except high-low's dealt hand, which is held in memory and refunded if the player leaves
+  or the chunk unloads. A hold'em table cannot do that. Where that state lives (tile entity NBT)
+  should be decided once, for all table games.
 
 The bot's `activity/` has 3D tables for several of these. Worth reading for layout
 and proportion before modelling a table block — the geometry problem is already

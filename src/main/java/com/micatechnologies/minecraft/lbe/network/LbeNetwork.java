@@ -13,7 +13,7 @@ import net.minecraftforge.fml.relauncher.Side;
  * already delivers, so nothing is sent the other way.</p>
  *
  * <p>The casino needs both. A bet is a decision a player makes inside a screen, not a block
- * interaction, so {@link PacketSlotSpin} is LBE's only client → server message — and therefore the
+ * interaction, so {@link PacketCasinoPlay} is LBE's only client → server message — and therefore the
  * only one that has to treat its contents as hostile. It says so at length in its own javadoc.</p>
  */
 public final class LbeNetwork {
@@ -34,10 +34,10 @@ public final class LbeNetwork {
         // net.minecraft.client type and goes through Lbe.proxy instead.
         CHANNEL.registerMessage(PacketRevealLoot.Handler.class, PacketRevealLoot.class,
             nextId++, Side.CLIENT);
-        CHANNEL.registerMessage(PacketSlotResult.Handler.class, PacketSlotResult.class,
+        CHANNEL.registerMessage(PacketCasinoResult.Handler.class, PacketCasinoResult.class,
             nextId++, Side.CLIENT);
         // The only one handled on the server, and the only one a player can forge.
-        CHANNEL.registerMessage(PacketSlotSpin.Handler.class, PacketSlotSpin.class,
+        CHANNEL.registerMessage(PacketCasinoPlay.Handler.class, PacketCasinoPlay.class,
             nextId++, Side.SERVER);
     }
 }

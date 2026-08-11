@@ -1,0 +1,31 @@
+{
+  "parent": "block/cube",
+  "textures": {
+    "particle": "lbe:blocks/coin_flip_table_front",
+    "north": "lbe:blocks/coin_flip_table_front",
+    "south": "lbe:blocks/coin_flip_table_side",
+    "east": "lbe:blocks/coin_flip_table_side",
+    "west": "lbe:blocks/coin_flip_table_side",
+    "up": "lbe:blocks/coin_flip_table_top",
+    "down": "lbe:blocks/coin_flip_table_bottom"
+  },
+  "display": {
+    "gui": {
+      "rotation": [
+        30,
+        225,
+        0
+      ],
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.625,
+        0.625,
+        0.625
+      ]
+    }
+  }
+}
