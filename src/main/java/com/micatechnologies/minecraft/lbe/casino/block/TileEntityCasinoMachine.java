@@ -14,6 +14,7 @@ import com.micatechnologies.minecraft.lbe.casino.keno.KenoGame;
 import com.micatechnologies.minecraft.lbe.casino.plinko.PlinkoGame;
 import com.micatechnologies.minecraft.lbe.casino.roulette.RouletteGame;
 import com.micatechnologies.minecraft.lbe.casino.slots.SlotSpin;
+import com.micatechnologies.minecraft.lbe.casino.videopoker.VideoPokerGame;
 import com.micatechnologies.minecraft.lbe.casino.war.WarGame;
 import com.micatechnologies.minecraft.lbe.network.LbeNetwork;
 import com.micatechnologies.minecraft.lbe.network.PacketCasinoResult;
@@ -67,14 +68,25 @@ public class TileEntityCasinoMachine extends TileEntity {
      */
     private final Random random = new Random();
 
-    /** A high-low hand mid-deal, with the money already taken. */
+    /**
+     * A two-step game mid-deal, with the money already taken.
+     *
+     * <p>Exactly one of the game fields is set, chosen by {@link #kind}. Two nullable fields rather
+     * than a shared interface because the two games have nothing in common beyond "the stake is
+     * already down" — inventing a base type for that would be a bigger lie than a discriminator.
+     */
     private static final class OpenHand {
-        final HighLowGame game;
+        final CasinoGame kind;
+        @Nullable final HighLowGame highLow;
+        @Nullable final VideoPokerGame videoPoker;
         final Wager wager;
         final double bet;
 
-        OpenHand(HighLowGame game, Wager wager, double bet) {
-            this.game = game;
+        OpenHand(CasinoGame kind, @Nullable HighLowGame highLow,
+                 @Nullable VideoPokerGame videoPoker, Wager wager, double bet) {
+            this.kind = kind;
+            this.highLow = highLow;
+            this.videoPoker = videoPoker;
             this.wager = wager;
             this.bet = bet;
         }
@@ -123,10 +135,10 @@ public class TileEntityCasinoMachine extends TileEntity {
             return;
         }
 
-        // High-low's second step settles a hand that is already paid for, so it must run before any
-        // of the bet checks below — there is no new bet to check.
-        if (game == CasinoGame.HIGH_LOW && openHands.containsKey(player.getUniqueID())) {
-            resolveHighLowCall(player, optionA);
+        // A two-step game's second half settles a hand that is already paid for, so it must run
+        // before any of the bet checks below — there is no new bet to check.
+        if (game.isTwoStep() && openHands.containsKey(player.getUniqueID())) {
+            resolveOpenHand(player, optionA);
             return;
         }
 
@@ -159,8 +171,8 @@ public class TileEntityCasinoMachine extends TileEntity {
         markPlayed(player);
 
         // Past this point the money is held and MUST be settled on every path.
-        if (game == CasinoGame.HIGH_LOW) {
-            dealHighLow(player, wager, rounded);
+        if (game.isTwoStep()) {
+            deal(player, game, wager, rounded);
             return;
         }
 
@@ -293,6 +305,14 @@ public class TileEntityCasinoMachine extends TileEntity {
                 reveal[path.length] = drop.slot();
                 return reveal;
             }
+            case VIDEO_POKER: {
+                VideoPokerGame.Result hand = (VideoPokerGame.Result) result;
+                int[] reveal = new int[VideoPokerGame.HAND_SIZE];
+                for (int i = 0; i < reveal.length; i++) {
+                    reveal[i] = cardId(hand.finalHand().get(i));
+                }
+                return reveal;
+            }
             case BACCARAT: {
                 BaccaratGame.Result coup = (BaccaratGame.Result) result;
                 // Both hands, each prefixed by its length so the screen knows where one ends.
@@ -335,40 +355,79 @@ public class TileEntityCasinoMachine extends TileEntity {
     // High-low's two steps
     // ---------------------------------------------------------------------------------------------
 
-    /** Step one: the stake is taken and the base card shown. Nothing is decided yet. */
-    private void dealHighLow(EntityPlayerMP player, Wager wager, double bet) {
-        HighLowGame hand = new HighLowGame(random);
-        openHands.put(player.getUniqueID(), new OpenHand(hand, wager, bet));
-        Card base = hand.base();
-        LbeNetwork.CHANNEL.sendTo(PacketCasinoResult.dealt(CasinoGame.HIGH_LOW,
-            balanceOf(player), new int[] {cardId(base)},
-            "Higher or lower than " + base + "?"), player);
+    /** Step one: the stake is taken and something is dealt. Nothing is decided yet. */
+    private void deal(EntityPlayerMP player, CasinoGame game, Wager wager, double bet) {
+        if (game == CasinoGame.HIGH_LOW) {
+            HighLowGame hand = new HighLowGame(random);
+            openHands.put(player.getUniqueID(), new OpenHand(game, hand, null, wager, bet));
+            Card base = hand.base();
+            LbeNetwork.CHANNEL.sendTo(PacketCasinoResult.dealt(game, balanceOf(player),
+                new int[] {cardId(base)}, "Higher or lower than " + base + "?"), player);
+            return;
+        }
+        VideoPokerGame poker = new VideoPokerGame(random);
+        openHands.put(player.getUniqueID(), new OpenHand(game, null, poker, wager, bet));
+        int[] reveal = new int[VideoPokerGame.HAND_SIZE];
+        for (int i = 0; i < reveal.length; i++) {
+            reveal[i] = cardId(poker.hand().get(i));
+        }
+        LbeNetwork.CHANNEL.sendTo(PacketCasinoResult.dealt(game, balanceOf(player), reveal,
+            "Hold what you want, then draw."), player);
     }
 
-    /** Step two: the call settles the hand that is already paid for. */
-    private void resolveHighLowCall(EntityPlayerMP player, int optionA) {
+    /** Step two: the player's choice settles the hand that is already paid for. */
+    private void resolveOpenHand(EntityPlayerMP player, int optionA) {
         OpenHand open = openHands.remove(player.getUniqueID());
         if (open == null) {
             return;
         }
-        HighLowGame.Call call = HighLowGame.callFor(optionA);
-        if (!HighLowGame.isCallable(open.game.base(), call)) {
-            // Should be impossible — such a base card is never dealt — but a hand that cannot be
-            // called must give the money back rather than sit there holding it.
-            open.wager.cancel();
-            reject(player, "That call cannot win here; your bet has been returned.");
-            return;
-        }
         GameResult result;
         try {
-            result = open.game.call(call);
+            result = open.kind == CasinoGame.HIGH_LOW
+                ? resolveHighLow(player, open, optionA)
+                : open.videoPoker.draw(holdsFrom(optionA));
         } catch (RuntimeException e) {
-            Lbe.LOGGER.error("[casino] A high-low hand failed to resolve; refunding it.", e);
+            Lbe.LOGGER.error("[casino] A {} hand failed to resolve; refunding it.",
+                open.kind.displayName(), e);
             open.wager.cancel();
             reject(player, "The machine jammed. Your bet has been returned.");
             return;
         }
-        settle(player, CasinoGame.HIGH_LOW, open.wager, result, open.bet);
+        if (result == null) {
+            return;   // already refunded and explained
+        }
+        settle(player, open.kind, open.wager, result, open.bet);
+    }
+
+    /**
+     * High-low's call, or null when it could not be made and the stake has been returned.
+     */
+    @Nullable
+    private GameResult resolveHighLow(EntityPlayerMP player, OpenHand open, int optionA) {
+        HighLowGame.Call call = HighLowGame.callFor(optionA);
+        if (!HighLowGame.isCallable(open.highLow.base(), call)) {
+            // Should be impossible — such a base card is never dealt — but a hand that cannot be
+            // called must give the money back rather than sit there holding it.
+            open.wager.cancel();
+            reject(player, "That call cannot win here; your bet has been returned.");
+            return null;
+        }
+        return open.highLow.call(call);
+    }
+
+    /**
+     * Unpacks video poker's holds from the option bitmask.
+     *
+     * <p>Five bits, one per card. A bitmask rather than five booleans because the play packet
+     * already carries an int and a hostile client can do no more damage with a wrong bit than
+     * discard a card it meant to keep — its own money, its own mistake.
+     */
+    private static boolean[] holdsFrom(int mask) {
+        boolean[] holds = new boolean[VideoPokerGame.HAND_SIZE];
+        for (int i = 0; i < holds.length; i++) {
+            holds[i] = (mask & (1 << i)) != 0;
+        }
+        return holds;
     }
 
     /**

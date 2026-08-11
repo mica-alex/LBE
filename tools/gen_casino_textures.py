@@ -43,6 +43,7 @@ MACHINES = {
     "plinko_machine":   (True,  (0x50, 0x40, 0x24), (0x38, 0x2C, 0x18), "pegs"),
     "keno_machine":     (True,  (0x40, 0x24, 0x50), (0x2C, 0x18, 0x38), "grid"),
     "baccarat_table":   (False, (0x1E, 0x44, 0x2E), (0x14, 0x2E, 0x1F), "baccarat"),
+    "video_poker_machine": (True, (0x28, 0x30, 0x4E), (0x18, 0x1E, 0x34), "poker"),
 }
 
 
@@ -170,7 +171,16 @@ def motif_baccarat(rows):
     box(rows, 7, 12, 8, 13, GOLD)
 
 
+def motif_poker(rows):
+    """Five cards fanned, which is the game in one glyph."""
+    for i in range(5):
+        x = 2 + i * 3
+        box(rows, x, 5 + (i % 2), x + 1, 11 + (i % 2), WHITE)
+        rows[6 + (i % 2)][x] = RED if i % 2 == 0 else BLACK
+
+
 MOTIFS = {
+    "poker": motif_poker,
     "baccarat": motif_baccarat,
     "coin": motif_coin,
     "cards": motif_cards,

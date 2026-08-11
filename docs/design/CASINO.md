@@ -162,7 +162,7 @@ produces a block which does nothing at all.
 
 ## The games
 
-Seven, all sharing one block class, one tile entity, one screen and one pair of packets. Adding
+Nine, all sharing one block class, one tile entity, one screen and one pair of packets. Adding
 another is: pure logic in its own package, a constant in `CasinoGame`, a branch in
 `TileEntityCasinoMachine.resolve`, a branch in `GuiCasinoMachine.drawReveal`, and a motif in
 `tools/gen_casino_textures.py`. Nothing that moves money is touched.
@@ -176,6 +176,8 @@ another is: pure logic in its own package, a constant in `CasinoGame`, a branch 
 | War | 97.2% | `war_game.py` | **yes** — priced the free push |
 | High-low | 96.9–97.3% | `highlow_game.py` | **yes** — odds-weighted; see below |
 | Keno | 91.3–92.5% | `keno_game.py` + `KENO_PAYTABLE` | **yes** — rescaled from 45–75% |
+| Baccarat | 98.6 / 98.9 / 85.6% | `baccarat_game.py` | no — the 5% banker commission is its edge |
+| Video poker | 70% naive → ~99.5% optimal | `video_poker_game.py` (9/6 Jacks or Better) | no |
 
 ### Why four games needed repricing
 
@@ -206,11 +208,11 @@ what it costs to play.
 
 | Game | Bot source | What it needs first |
 |---|---|---|
-| Video poker | `video_poker_game.py` | Hold/draw is two round trips against one stake — the same two-step shape high-low uses, so the pattern exists |
 | Blackjack | `blackjack_game.py` | Hit/stand/double/split. Splits turn one wager into several, which `Wager` does not model yet |
 | Craps | `craps_game.py` | Many simultaneous bets across several rolls — needs a wager *set* |
 | Xtreme Hold'em | `xtreme_holdem_game.py` | Player-vs-player. Needs a pot, and a table whose state survives a restart |
-| Baccarat, mines, war variants | various | Straight ports; no new machinery |
+| Scratch cards, mines | `scratch_game.py`, `mines_game.py` | Mines needs reveal-then-cash-out, a third step shape |
+| Craps | `craps_game.py` | Many simultaneous bets across several rolls — needs a wager *set* |
 
 Two things to settle before the multiplayer tables:
 
@@ -218,8 +220,9 @@ Two things to settle before the multiplayer tables:
   released to one winner — but `Wager` is one stake with one outcome. It wants a sibling type, not
   a hack.
 - **A table mid-hand has state that must survive a restart.** Every machine here is deliberately
-  stateless except high-low's dealt hand, which is held in memory and refunded if the player leaves
-  or the chunk unloads. A hold'em table cannot do that. Where that state lives (tile entity NBT)
+  stateless except the two-step games — high-low's dealt card and video poker's dealt hand — whose
+  state is held in memory and refunded if the player leaves or the chunk unloads. A hold'em table
+  cannot do that. Where that state lives (tile entity NBT)
   should be decided once, for all table games.
 
 The bot's `activity/` has 3D tables for several of these. Worth reading for layout

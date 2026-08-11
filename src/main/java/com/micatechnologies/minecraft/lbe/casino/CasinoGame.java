@@ -22,7 +22,8 @@ public enum CasinoGame {
     ROULETTE("roulette_table", "Roulette", Cabinet.TABLE),
     PLINKO("plinko_machine", "Plinko", Cabinet.TALL),
     KENO("keno_machine", "Keno", Cabinet.TALL),
-    BACCARAT("baccarat_table", "Baccarat", Cabinet.TABLE);
+    BACCARAT("baccarat_table", "Baccarat", Cabinet.TABLE),
+    VIDEO_POKER("video_poker_machine", "Video Poker", Cabinet.TALL);
 
     /** What shape of block the game sits in. */
     public enum Cabinet {
@@ -59,6 +60,17 @@ public enum CasinoGame {
     /** True when this game occupies two block positions. */
     public boolean isTall() {
         return cabinet == Cabinet.TALL;
+    }
+
+    /**
+     * Whether the stake is taken before the player's real decision, so the game runs in two steps.
+     *
+     * <p>High-low deals a card and then asks which way; video poker deals five and then asks which
+     * to keep. Both take the money up front, which means a hand in progress is money in the air —
+     * see {@code TileEntityCasinoMachine}'s note on why that state is not written to disk.
+     */
+    public boolean isTwoStep() {
+        return this == HIGH_LOW || this == VIDEO_POKER;
     }
 
     /** Texture prefix for this game's cabinet, e.g. {@code blocks/slot_machine}. */

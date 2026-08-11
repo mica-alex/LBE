@@ -12,7 +12,9 @@ import com.micatechnologies.minecraft.lbe.casino.keno.KenoGame;
 import com.micatechnologies.minecraft.lbe.casino.plinko.PlinkoGame;
 import com.micatechnologies.minecraft.lbe.casino.roulette.RouletteGame;
 import com.micatechnologies.minecraft.lbe.casino.slots.SlotPaytable;
+import com.micatechnologies.minecraft.lbe.casino.poker.PokerHand;
 import com.micatechnologies.minecraft.lbe.casino.slots.SlotSymbol;
+import com.micatechnologies.minecraft.lbe.casino.videopoker.VideoPokerGame;
 import com.micatechnologies.minecraft.lbe.network.LbeNetwork;
 import com.micatechnologies.minecraft.lbe.network.PacketCasinoPlay;
 import com.micatechnologies.minecraft.lbe.network.PacketCasinoResult;
@@ -92,6 +94,15 @@ public class GuiCasinoMachine extends GuiScreen {
 
     /** Keno only: which numbers are ticked. */
     private final SortedSet<Integer> picks = new TreeSet<>();
+
+    /**
+     * Video poker only: which of the five cards are held, one bit each.
+     *
+     * <p>A bitmask because it travels as the option int the play packet already carries, and
+     * because holds are the one choice in the casino that is not "pick one of these" — every other
+     * game selects a single option, and this one toggles five independently.
+     */
+    private int heldMask;
 
     /** Set while a two-step game has money down and is waiting for the player's second choice. */
     private boolean awaitingChoice;
@@ -236,7 +247,7 @@ public class GuiCasinoMachine extends GuiScreen {
             // High-low grows a row of buttons the moment a card is dealt. Reserving the space up
             // front costs one empty strip and avoids the whole window resizing and re-centring
             // itself under the player's cursor mid-hand.
-            return game == CasinoGame.HIGH_LOW ? 1 : 0;
+            return game.isTwoStep() ? 1 : 0;
         }
         return (options.size() + optionColumns - 1) / optionColumns;
     }
@@ -252,6 +263,8 @@ public class GuiCasinoMachine extends GuiScreen {
             case BACCARAT:
                 // Two rows of up to three cards, with a score beside each.
                 return 60;
+            case VIDEO_POKER:
+                return 40;
             case PLINKO:
                 return 46;
             case KENO:
@@ -300,6 +313,16 @@ public class GuiCasinoMachine extends GuiScreen {
                     options.add(new Option(risk.name().charAt(0)
                         + risk.name().substring(1).toLowerCase(Locale.ROOT),
                         risk.ordinal(), 0));
+                }
+                break;
+            case VIDEO_POKER:
+                // One toggle per dealt card, and only once there are cards to hold.
+                if (awaitingChoice && settled != null) {
+                    for (int i = 0; i < VideoPokerGame.HAND_SIZE; i++) {
+                        Card card = TileEntityCasinoMachine.cardFromId(settled.reveal(i, 0));
+                        boolean held = (heldMask & (1 << i)) != 0;
+                        options.add(new Option((held ? "[" + card + "]" : " " + card + " "), i, 0));
+                    }
                 }
                 break;
             case BACCARAT:
@@ -381,6 +404,13 @@ public class GuiCasinoMachine extends GuiScreen {
         if (index < 0 || index >= options.size()) {
             return;
         }
+        if (game == CasinoGame.VIDEO_POKER && awaitingChoice) {
+            // Holds toggle independently; there is no "selected" card. The draw happens when the
+            // player presses Draw, not when they touch a card, so they can change their mind.
+            heldMask ^= 1 << index;
+            initGui();
+            return;
+        }
         if (game == CasinoGame.KENO) {
             // Keno's two buttons are actions, not a selection.
             picks.clear();
@@ -404,7 +434,17 @@ public class GuiCasinoMachine extends GuiScreen {
     }
 
     private void play() {
-        if (animating || awaitingChoice) {
+        if (animating) {
+            return;
+        }
+        if (awaitingChoice) {
+            // Video poker's second step: the stake is already down, so this draws rather than bets.
+            if (game == CasinoGame.VIDEO_POKER) {
+                LbeNetwork.CHANNEL.sendToServer(new PacketCasinoPlay(pos, 0.0, heldMask, 0, null));
+                awaitingChoice = false;
+                animating = true;
+                animationTicks = 0;
+            }
             return;
         }
         if (game == CasinoGame.KENO && picks.isEmpty()) {
@@ -413,6 +453,7 @@ public class GuiCasinoMachine extends GuiScreen {
         }
         pending = null;
         settled = null;
+        heldMask = 0;
         animating = true;
         animationTicks = 0;
         status = "";
@@ -491,8 +532,8 @@ public class GuiCasinoMachine extends GuiScreen {
         // Now, with the reveal. The money moved seconds ago; this is when the player learns of it.
         balance = pendingBalance;
         pendingBalance = PacketCasinoResult.UNKNOWN_BALANCE;
-        if (game == CasinoGame.HIGH_LOW) {
-            initGui();   // drop the Higher/Lower buttons until another hand is dealt
+        if (game.isTwoStep()) {
+            initGui();   // drop the mid-hand buttons until another hand is dealt
         }
     }
 
@@ -517,10 +558,13 @@ public class GuiCasinoMachine extends GuiScreen {
         drawStatus(left, top);
 
         if (playButton != null) {
-            playButton.enabled = !animating && !awaitingChoice;
+            // Video poker keeps its button live while choosing, because pressing it IS the draw.
+            playButton.enabled = !animating
+                && (!awaitingChoice || game == CasinoGame.VIDEO_POKER);
             playButton.displayString = animating ? "..."
-                : awaitingChoice ? "Choose above"
-                : "Play " + LbeEconomyFormat(bet);
+                : awaitingChoice
+                    ? (game == CasinoGame.VIDEO_POKER ? "Draw" : "Choose above")
+                    : "Play " + LbeEconomyFormat(bet);
         }
         // Mark the chosen option, since vanilla buttons have no selected state. Colour alone is
         // not enough — a player who cannot tell what is selected cannot tell whether the machine
@@ -530,7 +574,8 @@ public class GuiCasinoMachine extends GuiScreen {
                 continue;
             }
             int index = button.id - ID_OPTION_BASE;
-            boolean chosen = index == selectedOption && game != CasinoGame.KENO;
+            boolean chosen = index == selectedOption && game != CasinoGame.KENO
+                && game != CasinoGame.VIDEO_POKER;
             button.packedFGColour = chosen ? 0xFFD54F : 0;
             if (index < options.size()) {
                 button.displayString = (chosen ? "> " : "") + options.get(index).label;
@@ -559,6 +604,9 @@ public class GuiCasinoMachine extends GuiScreen {
                 break;
             case PLINKO:
                 drawPlinko(centre, top);
+                break;
+            case VIDEO_POKER:
+                drawVideoPoker(centre, top);
                 break;
             case BACCARAT:
                 drawBaccarat(centre, top);
@@ -653,6 +701,23 @@ public class GuiCasinoMachine extends GuiScreen {
             // The ball, falling: cosmetic, and it lands wherever the server said.
             int row = Math.min(PlinkoGame.ROWS, animationTicks * PlinkoGame.ROWS / ANIMATION_TICKS);
             drawCenteredString(fontRenderer, "o", centre, top + row * 2, 0xFFFFFF);
+        }
+    }
+
+    /** The five cards, plus what the finished hand was worth. */
+    private void drawVideoPoker(int centre, int top) {
+        if (settled == null) {
+            drawCenteredString(fontRenderer, "Deal to begin", centre, top + 14, 0x909090);
+            return;
+        }
+        StringBuilder hand = new StringBuilder();
+        for (int i = 0; i < VideoPokerGame.HAND_SIZE; i++) {
+            hand.append(TileEntityCasinoMachine.cardFromId(settled.reveal(i, 0))).append("  ");
+        }
+        drawCenteredString(fontRenderer, hand.toString().trim(), centre, top + 10, 0xE0E0F0);
+        if (awaitingChoice) {
+            drawCenteredString(fontRenderer, "Click a card to hold it", centre, top + 26,
+                0x707080);
         }
     }
 
@@ -770,6 +835,10 @@ public class GuiCasinoMachine extends GuiScreen {
             case BACCARAT:
                 // Each side has its own return, so show the one being backed.
                 return baccaratReturnLine();
+            case VIDEO_POKER:
+                // The only game here whose return depends on how well it is played, so stating one
+                // number would be a lie in either direction.
+                return "Returns up to 99.5% — with perfect play";
             default:
                 return "";
         }
