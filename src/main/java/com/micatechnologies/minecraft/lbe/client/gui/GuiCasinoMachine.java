@@ -52,7 +52,15 @@ public class GuiCasinoMachine extends GuiScreen {
 
     private static final int TILE = 32;
     private static final int PANEL_WIDTH = 248;
-    private static final int PANEL_HEIGHT = 186;
+
+    /** Space inside the panel edge that nothing is drawn in. */
+    private static final int MARGIN = 10;
+
+    /** Height of one row of option buttons, including the gap under it. */
+    private static final int OPTION_ROW_HEIGHT = 22;
+
+    /** Room for the title, the two status lines, the return line and the bet row. */
+    private static final int CHROME_HEIGHT = 118;
 
     /** Ticks each slot reel keeps spinning. Staggered, so they land 1-2-3. */
     private static final int[] REEL_STOP_TICKS = {24, 34, 44};
@@ -97,6 +105,24 @@ public class GuiCasinoMachine extends GuiScreen {
 
     private GuiButton playButton;
 
+    /**
+     * Panel height, worked out in {@link #initGui} rather than fixed.
+     *
+     * <p>It has to be: roulette offers nine options and keno draws an eighty-cell board, while coin
+     * flip offers two and slots none. A single height that suits all of them does not exist — the
+     * first version used one and roulette's third row of buttons landed on top of the bet row.
+     */
+    private int panelHeight = 186;
+
+    /** How tall this game's outcome drawing is, so nothing is laid out on top of it. */
+    private int revealHeight = 40;
+
+    /** Width of one option button, sized to the longest label this game has. */
+    private int optionWidth = 56;
+
+    /** Options per row, chosen so they fit the panel. */
+    private int optionColumns = 4;
+
     public GuiCasinoMachine(BlockPos pos, CasinoGame game) {
         this.pos = pos;
         this.game = game;
@@ -128,23 +154,98 @@ public class GuiCasinoMachine extends GuiScreen {
         if (selectedOption >= options.size()) {
             selectedOption = 0;
         }
+        measure();
 
         int left = (width - PANEL_WIDTH) / 2;
-        int top = (height - PANEL_HEIGHT) / 2;
+        int top = (height - panelHeight) / 2;
+        int rows = optionRows();
 
-        // Option buttons, wrapped into rows of four.
-        int optionTop = top + PANEL_HEIGHT - 74;
+        // Options sit directly above the bet row, however many rows they need.
+        int optionsBottom = top + panelHeight - 36;
+        int optionTop = optionsBottom - rows * OPTION_ROW_HEIGHT;
         for (int i = 0; i < options.size(); i++) {
-            int column = i % 4;
-            int row = i / 4;
+            int row = i / optionColumns;
+            int column = i % optionColumns;
+            // Each row is centred on its own, so a short last row does not hug the left edge —
+            // which is exactly what high-low's two buttons did.
+            int inRow = Math.min(optionColumns, options.size() - row * optionColumns);
+            int rowWidth = inRow * optionWidth + (inRow - 1) * 4;
+            int rowLeft = left + (PANEL_WIDTH - rowWidth) / 2;
             buttonList.add(new GuiButton(ID_OPTION_BASE + i,
-                left + 10 + column * 58, optionTop + row * 22, 56, 20, options.get(i).label));
+                rowLeft + column * (optionWidth + 4), optionTop + row * OPTION_ROW_HEIGHT,
+                optionWidth, 20, options.get(i).label));
         }
 
-        buttonList.add(new GuiButton(ID_BET_DOWN, left + 10, top + PANEL_HEIGHT - 28, 20, 20, "-"));
-        buttonList.add(new GuiButton(ID_BET_UP, left + 34, top + PANEL_HEIGHT - 28, 20, 20, "+"));
-        playButton = new GuiButton(ID_PLAY, left + 62, top + PANEL_HEIGHT - 28, 176, 20, "Play");
+        int betTop = top + panelHeight - 28;
+        buttonList.add(new GuiButton(ID_BET_DOWN, left + MARGIN, betTop, 20, 20, "-"));
+        buttonList.add(new GuiButton(ID_BET_UP, left + MARGIN + 24, betTop, 20, 20, "+"));
+        int playLeft = left + MARGIN + 52;
+        playButton = new GuiButton(ID_PLAY, playLeft, betTop,
+            left + PANEL_WIDTH - MARGIN - playLeft, 20, "Play");
         buttonList.add(playButton);
+    }
+
+    /**
+     * Works out how wide the option buttons need to be, how many fit a row, and how tall the panel
+     * must therefore become.
+     *
+     * <p>Driven by the actual rendered width of the labels. High-low's buttons read
+     * "Higher 11.62x", which is wider than the 56 pixels the first version assumed and simply spilled
+     * out of them.
+     */
+    private void measure() {
+        revealHeight = revealHeightFor(game);
+
+        int widest = 0;
+        for (Option option : options) {
+            widest = Math.max(widest, fontRenderer.getStringWidth(option.label));
+        }
+        // Label plus breathing room on both sides, never narrower than a "+" button.
+        int wanted = Math.max(44, widest + 12);
+
+        int usable = PANEL_WIDTH - MARGIN * 2;
+        // As many columns as the widest label allows, capped at four so a row of nine roulette bets
+        // does not become one unreadable strip.
+        optionColumns = options.isEmpty() ? 1
+            : Math.max(1, Math.min(4, (usable + 4) / (wanted + 4)));
+        if (optionColumns > options.size()) {
+            optionColumns = options.size();
+        }
+        // Grow the buttons to fill the row once the column count is settled, so two wide buttons
+        // look deliberate rather than stranded.
+        optionWidth = options.isEmpty() ? wanted
+            : Math.min(96, (usable - (optionColumns - 1) * 4) / optionColumns);
+        optionWidth = Math.max(optionWidth, Math.min(wanted, usable));
+
+        panelHeight = CHROME_HEIGHT + revealHeight + optionRows() * OPTION_ROW_HEIGHT;
+    }
+
+    private int optionRows() {
+        if (options.isEmpty()) {
+            // High-low grows a row of buttons the moment a card is dealt. Reserving the space up
+            // front costs one empty strip and avoids the whole window resizing and re-centring
+            // itself under the player's cursor mid-hand.
+            return game == CasinoGame.HIGH_LOW ? 1 : 0;
+        }
+        return (options.size() + optionColumns - 1) / optionColumns;
+    }
+
+    /** How much vertical room this game's outcome drawing needs. */
+    private static int revealHeightFor(CasinoGame game) {
+        switch (game) {
+            case SLOTS:
+                return TILE + 8;
+            case WAR:
+            case HIGH_LOW:
+                return 52;
+            case PLINKO:
+                return 46;
+            case KENO:
+                // Eight rows of cells, plus a little under them.
+                return 8 * 11 + 6;
+            default:
+                return 34;
+        }
     }
 
     /** The choices this game offers. Empty for a game with nothing to choose. */
@@ -376,11 +477,11 @@ public class GuiCasinoMachine extends GuiScreen {
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         drawDefaultBackground();
         int left = (width - PANEL_WIDTH) / 2;
-        int top = (height - PANEL_HEIGHT) / 2;
+        int top = (height - panelHeight) / 2;
 
-        drawRect(left, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xF0100A18);
+        drawRect(left, top, left + PANEL_WIDTH, top + panelHeight, 0xF0100A18);
         drawRect(left, top, left + PANEL_WIDTH, top + 1, 0xFFF0A81E);
-        drawRect(left, top + PANEL_HEIGHT - 1, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xFFF0A81E);
+        drawRect(left, top + panelHeight - 1, left + PANEL_WIDTH, top + panelHeight, 0xFFF0A81E);
 
         drawCenteredString(fontRenderer, TextFormatting.GOLD + game.displayName(),
             width / 2, top + 8, 0xFFFFFF);
@@ -545,7 +646,8 @@ public class GuiCasinoMachine extends GuiScreen {
     }
 
     private void drawStatus(int left, int top) {
-        int textTop = top + PANEL_HEIGHT - 96;
+        // Directly under the reveal, which is the only thing whose height varies above it.
+        int textTop = top + 24 + revealHeight + 4;
         String balanceText = balance == PacketCasinoResult.UNKNOWN_BALANCE
             ? "Balance: —" : "Balance: " + LbeEconomyFormat(balance);
         drawCenteredString(fontRenderer, balanceText, width / 2, textTop, 0xB0B0C0);
@@ -555,11 +657,22 @@ public class GuiCasinoMachine extends GuiScreen {
             colour = settled.multiplier() >= 50.0 ? 0xFFD54F : 0x7BE86C;
         }
         String line = animating ? "Good luck…" : status;
-        drawCenteredString(fontRenderer, line, width / 2, textTop + 11, colour);
+        // Trimmed rather than allowed to run past the panel edge: a backend message can be longer
+        // than anything written here, and one that overflows looks like a rendering fault.
+        drawCenteredString(fontRenderer, trimToPanel(line), width / 2, textTop + 11, colour);
 
         // The honest number. A machine that hides its edge is a machine with something to hide.
-        drawCenteredString(fontRenderer, returnLine(), width / 2, top + PANEL_HEIGHT - 42,
-            0x606070);
+        drawCenteredString(fontRenderer, returnLine(), width / 2, textTop + 23, 0x606070);
+    }
+
+    /** Shortens a line to something that fits between the panel edges. */
+    private String trimToPanel(String text) {
+        int usable = PANEL_WIDTH - MARGIN * 2;
+        if (text == null || fontRenderer.getStringWidth(text) <= usable) {
+            return text == null ? "" : text;
+        }
+        return fontRenderer.trimStringToWidth(text, usable - fontRenderer.getStringWidth("...."))
+            + "...";
     }
 
     /** What this game returns over time, stated plainly. */
