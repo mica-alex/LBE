@@ -330,7 +330,7 @@ public class TileEntityCasinoMachine extends TileEntity {
         if (open == null) {
             return;
         }
-        HighLowGame.Call call = optionA == 0 ? HighLowGame.Call.HIGHER : HighLowGame.Call.LOWER;
+        HighLowGame.Call call = HighLowGame.callFor(optionA);
         if (!HighLowGame.isCallable(open.game.base(), call)) {
             // Should be impossible — such a base card is never dealt — but a hand that cannot be
             // called must give the money back rather than sit there holding it.

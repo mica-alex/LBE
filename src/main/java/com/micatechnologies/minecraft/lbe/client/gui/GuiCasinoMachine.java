@@ -271,10 +271,12 @@ public class GuiCasinoMachine extends GuiScreen {
                 // Filled in once a base card has been dealt — until then there is nothing to price.
                 if (awaitingChoice && settledBase() != null) {
                     Card base = settledBase();
-                    options.add(new Option("Higher "
-                        + money(HighLowGame.payoutFor(base, HighLowGame.Call.HIGHER)) + "x", 0, 0));
-                    options.add(new Option("Lower "
-                        + money(HighLowGame.payoutFor(base, HighLowGame.Call.LOWER)) + "x", 1, 0));
+                    for (HighLowGame.Call call : HighLowGame.Call.values()) {
+                        // Label, price and value all from the same place, so they cannot drift.
+                        options.add(new Option(
+                            call.label() + " " + money(HighLowGame.payoutFor(base, call)) + "x",
+                            HighLowGame.codeFor(call), 0));
+                    }
                 }
                 break;
             case ROULETTE:

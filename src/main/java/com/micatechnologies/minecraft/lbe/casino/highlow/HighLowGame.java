@@ -46,7 +46,29 @@ public final class HighLowGame {
     /** Which way the next card is called to go. */
     public enum Call {
         HIGHER,
-        LOWER
+        LOWER;
+
+        /** What a player sees on the button. */
+        public String label() {
+            return this == HIGHER ? "Higher" : "Lower";
+        }
+    }
+
+    /**
+     * The number a call travels as, on the wire and in the option buttons.
+     *
+     * <p>Encoding and decoding live together here so the button that offers a call and the server
+     * that reads it cannot disagree. Coin flip had this same mapping written out by hand in three
+     * places; one of them drifting would pay the wrong side, and here it would also pay the wrong
+     * multiplier, since the two directions are priced differently.
+     */
+    public static int codeFor(Call call) {
+        return call == Call.HIGHER ? 0 : 1;
+    }
+
+    /** The call a code means. Anything but {@link #codeFor}'s lower value reads as higher. */
+    public static Call callFor(int code) {
+        return code == codeFor(Call.LOWER) ? Call.LOWER : Call.HIGHER;
     }
 
     private final Card base;
