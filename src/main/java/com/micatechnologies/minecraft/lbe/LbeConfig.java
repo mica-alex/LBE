@@ -50,6 +50,36 @@ public final class LbeConfig {
     public static final String CATEGORY_RARITY = "rarity";
     public static final String CATEGORY_LOOT = "loot";
     public static final String CATEGORY_OVERRIDES = "overrides";
+    public static final String CATEGORY_CASINO = "casino";
+
+    // --- casino -----------------------------------------------------------------------------------
+
+    /**
+     * Master switch for the casino. Off leaves the machines placeable but refusing to take bets.
+     *
+     * <p>Separate from "is there an economy": a server may have SUM installed and still not want
+     * gambling, and an operator turning this off should not have to uninstall anything.
+     */
+    public static boolean enableCasino = true;
+
+    /** Smallest accepted bet, in whole currency. Below this the machine refuses. */
+    public static double minimumBet = 1.0;
+
+    /**
+     * Largest accepted bet.
+     *
+     * <p>This is the real limit on how fast the casino can move money, in either direction — the
+     * jackpot pays 100× it. SUM's own {@code maxWalletTransaction} caps the payout independently,
+     * and an operator who sets that lower than {@code maximumBet * 100} will see jackpots refused,
+     * which is worth knowing before it happens to a player.
+     */
+    public static double maximumBet = 100.0;
+
+    /** Seconds a machine ignores the same player after a spin, so it cannot be held down. */
+    public static double spinCooldownSeconds = 1.5;
+
+    /** Whether a jackpot is announced to everyone on the server. */
+    public static boolean announceJackpots = true;
 
     // --- general ----------------------------------------------------------------------------------
 
@@ -602,9 +632,47 @@ public final class LbeConfig {
         rarityOverrides = config.getStringList("overrides", CATEGORY_OVERRIDES, rarityOverrides,
             "One 'item=tier' per line. Lines starting with # are comments.");
 
+        config.addCustomCategoryComment(CATEGORY_CASINO,
+            "The casino: slot machines and the games that follow them." + NL
+                + NL
+                + "These need a currency, and LBE does not have one — they use SUM's economy "
+                + "(the Server Utility Mod). Without SUM installed the machines still place and "
+                + "still work as decoration; they simply say the casino is closed. Loot boxes are "
+                + "not affected by anything in this category." + NL
+                + NL
+                + "SUM also has to be told to let LBE handle money, which is deliberate on its "
+                + "side: add 'lbe=escrow' to economy_integration.allowedMods in SUM's config. "
+                + "Until that is there, the machines refuse every bet and say why in the log.");
+        enableCasino = config.getBoolean("enableCasino", CATEGORY_CASINO, enableCasino,
+            "Whether the casino games accept bets. Turning this off leaves the machines placeable "
+                + "and inert, which is what you want if you like the blocks but not the gambling.");
+        minimumBet = config.getFloat("minimumBet", CATEGORY_CASINO, (float) minimumBet,
+            0.01F, 1_000_000.0F,
+            "Smallest bet a machine will take.");
+        maximumBet = config.getFloat("maximumBet", CATEGORY_CASINO, (float) maximumBet,
+            0.01F, 1_000_000.0F,
+            "Largest bet a machine will take. This is the real control on how fast the casino "
+                + "moves money: the slot jackpot pays 100x the bet, so a maximum of 100 means a "
+                + "single lucky spin can pay out 10,000. Note that SUM's own maxWalletTransaction "
+                + "caps payouts independently — set it below maximumBet*100 and jackpots will be "
+                + "refused rather than paid.");
+        spinCooldownSeconds = config.getFloat("spinCooldownSeconds", CATEGORY_CASINO,
+            (float) spinCooldownSeconds, 0.0F, 60.0F,
+            "How long a machine ignores the same player after a spin. Stops a held-down button "
+                + "from spending someone's balance faster than they can read the result, and stops "
+                + "a scripted client from spinning as fast as the network allows.");
+        announceJackpots = config.getBoolean("announceJackpots", CATEGORY_CASINO, announceJackpots,
+            "Whether the whole server hears about a jackpot. Jackpots are rare enough (about one "
+                + "in 14,000 spins) that this stays an event rather than noise.");
+
         if (config.hasChanged()) {
             config.save();
         }
+    }
+
+    /** True when a bet of {@code amount} is within the configured limits. */
+    public static boolean isBetAllowed(double amount) {
+        return amount >= minimumBet && amount <= maximumBet;
     }
 
     /** {@code "common, uncommon, rare, legendary"} — for array-setting comments. */

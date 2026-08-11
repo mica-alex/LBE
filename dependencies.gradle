@@ -43,4 +43,24 @@ dependencies {
     //
     // JEI and TheOneProbe are on the dev classpath via includeCommonDevEnvMods. JEI is genuinely
     // useful here — it puts a large real modded registry in front of the scorer during development.
+
+    // --- SUM's economy API: compile-only, and OPTIONAL AT RUNTIME ---------------------------------
+    //
+    // The casino needs a currency, and SUM already owns one. This is `compileOnly` rather than a
+    // dependency proper, which is what keeps the rule above intact: LBE still loads and still works
+    // in a pack with no SUM in it. The loot boxes — the actual mod — never touch this. Only the
+    // casino does, and the casino switches itself off when SUM is absent.
+    //
+    // Nothing may reference a `com.micatechnologies.minecraft.sum.*` type outside
+    // `casino/economy/SumEconomyBridge`. That one class is the only thing that fails to load without
+    // SUM installed, and `LbeEconomy` never loads it unless Forge says the mod is there. Widen that
+    // and the mod crashes on every pack that does not run SUM — a NoClassDefFoundError at block
+    // placement, not at startup, which is a far worse way to find out.
+    //
+    // The jar in libs/ is SUM's slim `-api` artefact, which is the whole published contract. It is
+    // vendored because SUM has not cut a release carrying it yet. TODO: once SUM tags one, delete
+    // libs/sum-api.jar and resolve it the way repositories.gradle describes — an Ivy repo over the
+    // GitHub Releases URL, pinned by a `sumVersion` in gradle.properties, exactly as SUM itself
+    // consumes CSM.
+    compileOnly files("libs/sum-api.jar")
 }
