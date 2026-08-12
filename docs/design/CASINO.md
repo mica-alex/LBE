@@ -205,6 +205,29 @@ lose three cents" is not a hand, so those eight cards are never dealt as a base.
 must return between 80% and 100%**. A new game cannot join the casino without somebody deciding
 what it costs to play.
 
+## What has actually been played
+
+Distinct from what has been computed, and worth keeping distinct: the returns in the table above
+are closed-form arithmetic pinned by tests, which is a claim about the maths and not about the
+software. As of **2026-08-12 all ten games have been played in a dev client against SUM's economy**,
+with real stakes taken and settled — wins, losses and pushes — and the escrow log checked afterwards
+for stranded money. None was found.
+
+Verified by play, not only by test:
+
+- money moves through the whole chain: screen → packet → tile entity → `CasinoBank` → SUM escrow;
+- a loss forfeits (destroys) the stake and a win releases it plus a separate credit for the
+  winnings, so the house's money and the player's own are never confused;
+- mines' derived multiplier settles correctly — a cash-out mid-board paid 1.7x, which is not a
+  figure in any table and could only come from the formula;
+- the two-step games (high-low, video poker) and the open-ended one (mines) all settle their stake
+  exactly once despite taking it several packets earlier.
+
+**Still unverified, and the reason this is not a 1.0:** every one of those runs was against SUM's
+*local* backend. Nothing here has ever talked to a remote OMCE economy, which is the claim SUM's own
+plan flags as the one most likely to be quietly false. Until that happens, a release is a
+pre-release.
+
 ## Deliberately not ported
 
 **Scratch cards.** Excluded with Alex on 2026-08-11, not deferred — do not pick this up.
