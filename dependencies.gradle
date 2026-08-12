@@ -57,10 +57,9 @@ dependencies {
     // and the mod crashes on every pack that does not run SUM — a NoClassDefFoundError at block
     // placement, not at startup, which is a far worse way to find out.
     //
-    // The jar in libs/ is SUM's slim `-api` artefact, which is the whole published contract. It is
-    // vendored because SUM has not cut a release carrying it yet. TODO: once SUM tags one, delete
-    // libs/sum-api.jar and resolve it the way repositories.gradle describes — an Ivy repo over the
-    // GitHub Releases URL, pinned by a `sumVersion` in gradle.properties, exactly as SUM itself
-    // consumes CSM.
-    compileOnly files("libs/sum-api.jar")
+    // Resolved from SUM's GitHub Releases, pinned by `sumVersion` in gradle.properties. The `-api`
+    // classifier is the slim contract jar; the full mod is never on this classpath, which is what
+    // makes the isolation rule above checkable rather than merely intended.
+    compileOnly "Mica-Technologies:uia-server-utility-mod:${sumVersion}:api"
+
 }

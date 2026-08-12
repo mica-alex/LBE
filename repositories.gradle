@@ -5,7 +5,30 @@
 // buildscript.properties), so most mod dependencies need nothing here.
 
 repositories {
-    // Intentionally empty.
+    // SUM (Server Utility Mod) release artifacts on GitHub. The casino compiles against SUM's slim
+    // `-api` jar, which SUM publishes on every release alongside the mod itself.
+    //
+    // This is the pattern SUM itself uses to consume CSM, and it exists so a fresh checkout and CI
+    // both resolve the same published artefact with no shell glue and no jar committed to this
+    // repo. The version is pinned as `sumVersion` in gradle.properties; bump it when the casino
+    // needs API surface from a newer SUM.
+    //
+    // Coordinate format: Mica-Technologies:uia-server-utility-mod:<tag>:api
+    // Resolves to: https://github.com/.../releases/download/<tag>/uia-server-utility-mod-<tag>-api.jar
+    ivy {
+        name 'SUM GitHub Releases'
+        url 'https://github.com/Mica-Technologies/uia-server-utility-mod/releases/download/'
+        patternLayout {
+            artifact '[revision]/[artifact]-[revision]-[classifier].[ext]'
+        }
+        // GitHub releases carry no Maven metadata, so tell Gradle to expect only the artifact.
+        metadataSources { artifact() }
+        // Scoped to SUM alone, so nothing else in the build ever tries to resolve via GitHub.
+        content { includeGroup 'Mica-Technologies' }
+    }
+
+    // Nothing else.
+    //
     //
     // LBE is designed to need no repository entry per supported mod — that is the entire point of
     // scoring items from the live registries at runtime instead of shipping a hand-written table per
