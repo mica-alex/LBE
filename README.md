@@ -7,7 +7,7 @@ have installed** — with no per-mod loot table written by anyone. That part is 
 else is scaffolding around it.
 
 **A casino.** Gambling games played for real server currency, starting with a slot machine. This
-half needs an economy, so it uses [SUM](https://github.com/mica-alex/uia-server-utility-mod)'s —
+half needs an economy, so it uses [SUM](https://github.com/Mica-Technologies/uia-server-utility-mod)'s —
 **optionally**. Without SUM installed, LBE loads normally, the loot boxes work exactly as described
 below, and the machines politely say the casino is closed. Nothing about the loot boxes depends on
 having a currency.
