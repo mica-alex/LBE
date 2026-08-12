@@ -6,6 +6,12 @@ on:
     types:
       - completed
 
+# Deleting old pre-releases is a write to the repository's releases, so this
+# needs the same grant the workflow that creates them does. It reported success
+# without it only because it had nothing old enough to delete yet.
+permissions:
+  contents: write
+
 jobs:
   cleanup_pre_release:
     name: Cleanup Old/Outdated Mod Pre-Release(s)

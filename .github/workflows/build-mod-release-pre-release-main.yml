@@ -12,6 +12,13 @@ on:
         required: false
         default: 'false'
 
+# The GITHUB_TOKEN is read-only by default on repositories outside an org that
+# grants otherwise, and this job pushes a tag and creates a release. Declared
+# here rather than flipped in the repository settings so it travels with the
+# repo and is visible to anyone reading the workflow.
+permissions:
+  contents: write
+
 jobs:
   assemble_release:
     name: Build Mod and Publish Release/Pre-Release
