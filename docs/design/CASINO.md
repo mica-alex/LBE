@@ -205,6 +205,21 @@ lose three cents" is not a hand, so those eight cards are never dealt as a base.
 must return between 80% and 100%**. A new game cannot join the casino without somebody deciding
 what it costs to play.
 
+## Deliberately not ported
+
+**Scratch cards.** Excluded with Alex on 2026-08-11, not deferred — do not pick this up.
+
+The bot's version is three games rather than one: eight tiers across matching, bingo and quick-rip,
+backed by 384 lines of pre-determined grid generation, a symbol weight table, per-tier paytable
+multipliers, wilds and an all-match bonus. Those tier tables *are* its economics, so a partial port
+would mean inventing them, and a faithful one is a session's work for a game whose whole appeal is
+the physical act of scratching a card — which does not survive the translation to a block and a
+screen. The machines here are things you walk up to and play; a scratch card is a thing you buy and
+take away, and LBE already has loot boxes for that.
+
+**Video poker's double-or-nothing.** Deferred rather than excluded. It stakes a payout that has
+already settled, which `Wager` cannot express — that is a wager-model change, not a game.
+
 ## Still to come
 
 | Game | Bot source | What it needs first |
@@ -212,7 +227,7 @@ what it costs to play.
 | Blackjack | `blackjack_game.py` | Hit/stand/double/split. Splits turn one wager into several, which `Wager` does not model yet |
 | Craps | `craps_game.py` | Many simultaneous bets across several rolls — needs a wager *set* |
 | Xtreme Hold'em | `xtreme_holdem_game.py` | Player-vs-player. Needs a pot, and a table whose state survives a restart |
-| Scratch cards | `scratch_game.py` | The big one left: 8 tiers across 3 game types, with 384 lines of pre-determined grid generation behind them. Its own session |
+
 | Craps | `craps_game.py` | Many simultaneous bets across several rolls — needs a wager *set* |
 
 Two things to settle before the multiplayer tables:
