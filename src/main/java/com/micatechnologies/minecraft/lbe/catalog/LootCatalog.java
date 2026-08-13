@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import net.minecraft.item.ItemStack;
+import net.minecraftforge.fml.common.ProgressManager;
 
 /**
  * The scored catalogue: every item in the pack, sorted into tiers, ready to be handed out.
@@ -40,6 +41,13 @@ public final class LootCatalog {
     private static RarityScorer scorer;
     private static RarityTable table = RarityTable.empty();
     private static LootRules rules = LootRules.defaults();
+
+    /**
+     * Items per loading-screen progress step while scoring. Coarse on purpose: the bar exists to
+     * show a mega-pack's launch is alive, not to be a speedometer, and a step per item would spend
+     * more time telling the story than living it.
+     */
+    private static final int SCORING_PROGRESS_CHUNK = 1000;
 
     private LootCatalog() {
         throw new AssertionError("No instances.");
@@ -62,9 +70,31 @@ public final class LootCatalog {
         reportProblems("overrides", overrides.problems());
         reportProblems("materialScores", declared.problems());
 
+        // ProgressManager is deliberately NOT gated to the client: it lives in fml.common, it is
+        // the same API FML's own loading stages report through, and on a dedicated server it is
+        // inert state tracking. The client splash picks the bars up automatically. Gating it
+        // through the proxy would add a seam for zero benefit — and rule 2 already forbids the
+        // alternative of touching a client class from here. Harmless on /lbe reload too: with no
+        // loading screen up, nobody renders the bar.
+        Lbe.LOGGER.info("Building the loot catalogue: reading the item and recipe registries...");
         graph = ForgeItemGraph.snapshot(blacklist);
         scorer = new RarityScorer(graph, LbeConfig.weights(), declared);
-        Map<String, Double> scores = scorer.scoreAll();
+
+        int totalItems = graph.keys().size();
+        Lbe.LOGGER.info("Scoring {} item variants...", totalItems);
+        // ProgressManager.pop THROWS if the steps do not come out exact, so the arithmetic here is
+        // load-bearing: ceil(total/chunk) steps, and the callback fires the bar once per chunk
+        // boundary plus once for a final partial chunk — the || never double-fires because a total
+        // on a chunk boundary satisfies the first test and short-circuits the second.
+        int steps = (totalItems + SCORING_PROGRESS_CHUNK - 1) / SCORING_PROGRESS_CHUNK;
+        ProgressManager.ProgressBar bar = ProgressManager.push("LBE: scoring items", steps);
+        Map<String, Double> scores = scorer.scoreAll(scored -> {
+            if (scored % SCORING_PROGRESS_CHUNK == 0 || scored == totalItems) {
+                bar.step(scored + " / " + totalItems);
+            }
+        });
+        ProgressManager.pop(bar);
+
         table = RarityTable.build(scores, LbeConfig.tierPercentileCuts, overrides);
         rules = LbeConfig.lootRules();
 

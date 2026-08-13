@@ -46,6 +46,13 @@ final class FakeItemGraph implements ItemGraph {
         return this;
     }
 
+    /** Add an item from fully explicit slots — each entry lists one slot's alternatives. */
+    FakeItemGraph craftedFromSlots(String key, int outputCount, List<List<String>> slots) {
+        profiles.put(key, ItemProfile.blank(key));
+        recipes.put(key, new CraftingRecipe(slots, outputCount));
+        return this;
+    }
+
     /** Add an item whose single ingredient slot accepts any of {@code alternatives}. */
     FakeItemGraph craftedFromAnyOf(String key, int outputCount, String... alternatives) {
         profiles.put(key, ItemProfile.blank(key));

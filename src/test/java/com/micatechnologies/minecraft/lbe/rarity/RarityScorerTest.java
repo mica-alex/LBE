@@ -1,8 +1,10 @@
 package com.micatechnologies.minecraft.lbe.rarity;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -184,6 +186,37 @@ class RarityScorerTest {
         double block = scorer.score("mc:block#0");
         assertTrue(Double.isFinite(ingot) && Double.isFinite(block),
             "a cycle must produce finite scores, not an overflow or a hang");
+    }
+
+    @Test
+    @DisplayName("a dense graph above a cycle scores in linear time, not exponential")
+    void denseGraphAboveACycleStaysLinear() {
+        // A tech pack in miniature: one ore <-> dust cycle at the bottom, then forty layers of
+        // crafting where each layer consumes three of the layer below. Every layer's subtree
+        // contains the cycle, so NOTHING here may enter the permanent cache — and if truncated
+        // results are not memoised within a single query either, each layer triples the walk and
+        // the top of the chain costs 3^maxRecipeDepth evaluations. That is not an infinite loop,
+        // just a walk that will not finish in a human lifetime: it is the "game locked up at 93%"
+        // postInit hang that a real pack full of ore/dust/ingot cycles produces at full scale.
+        FakeItemGraph graph = new FakeItemGraph()
+            .crafted("mc:ore#0", 1, "mc:dust#0")
+            .crafted("mc:dust#0", 1, "mc:ore#0");
+        String previous = "mc:dust#0";
+        for (int i = 0; i < 40; i++) {
+            String key = "mc:layer" + i + "#0";
+            graph.crafted(key, 1, previous, previous, previous);
+            previous = key;
+        }
+        RarityScorer scorer = scorer(graph);
+
+        Map<String, Double> scores = assertTimeoutPreemptively(Duration.ofSeconds(10),
+            () -> scorer.scoreAll(),
+            "scoring a cyclic graph must be linear per item, not exponential");
+        assertEquals(42, scores.size());
+        for (Map.Entry<String, Double> entry : scores.entrySet()) {
+            assertTrue(Double.isFinite(entry.getValue()),
+                entry.getKey() + " must have a finite score");
+        }
     }
 
     @Test

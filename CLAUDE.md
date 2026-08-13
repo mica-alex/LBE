@@ -125,10 +125,16 @@ Lbe*.java    Forge plumbing: @Mod class, config, registry, creative tab, proxies
    charging a parent for its children's chain length compounds catastrophically — it is what put a
    *wooden pickaxe* in the rare tier. See the `Eval` class doc in `RarityScorer`.
 
-5. **A truncated score is never cached.** Modded recipe graphs are full of cycles; hitting one scores
-   the sub-item as raw, and that result is context-dependent. Caching it would let one item's cycle
-   permanently deflate an unrelated item that merely shares an ingredient, with the damage depending
-   on registry iteration order. `RarityScorer` tracks a truncation counter for exactly this.
+5. **A truncated score is never cached across queries — but must be memoised within one.** Modded
+   recipe graphs are full of cycles; hitting one scores the sub-item as raw, and that result is
+   context-dependent. Caching it permanently would let one item's cycle deflate an unrelated item
+   that merely shares an ingredient, with the damage depending on registry iteration order —
+   `RarityScorer` tracks a truncation counter for exactly this. But the other half is just as
+   load-bearing: with **no** memoisation of truncated results, a query above a dense cycle re-walks
+   every *path* through the graph instead of every *node*, which is exponential — on a real tech
+   pack (ore↔dust↔ingot cycles under all metal processing) it hung both client and server at 93%
+   of loading, in postInit, forever. Hence the per-query `scoped` memo, cleared at every public
+   entry point. Both halves have regression tests.
 
 6. **World generation must not write outside the chunk being populated.** Hence the `+8` offset. The
    alternative is a generation cascade that can hang a server on first world load.

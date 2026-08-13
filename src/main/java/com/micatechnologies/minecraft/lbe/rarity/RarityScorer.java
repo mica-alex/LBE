@@ -66,9 +66,24 @@ import java.util.Set;
  * <p>That truncation is what makes the cache subtle. A truncated score is <b>context-dependent</b> —
  * it is only that low because of what happened to be on the stack at the time — so caching it would
  * let one item's cycle permanently deflate an unrelated item that merely shares an ingredient, with
- * the damage depending on registry iteration order. So a result is cached only if <i>no</i>
- * truncation occurred anywhere beneath it. Items genuinely inside a cycle get recomputed each time
- * they are reached; everything else memoises normally, which is nearly everything.</p>
+ * the damage depending on registry iteration order. So a result enters the permanent cache only if
+ * <i>no</i> truncation occurred anywhere beneath it.</p>
+ *
+ * <p>That rule alone, though, is <b>exponential on exactly the graphs that need it most</b>. On a
+ * vanilla-ish registry cycles are rare and nearly everything caches. On a tech pack, ore → dust →
+ * ingot → block cycles sit underneath essentially all metal processing, so everything crafted from
+ * metal — most of the pack — is transitively barred from the cache; with no memoisation at all for
+ * those items, one query re-walks every <i>path</i> through the recipe graph rather than every
+ * <i>node</i>, and with ore-dictionary slots fanning out dozens of alternatives the path count is
+ * astronomical. The symptom is postInit never finishing: not an infinite loop, a finite walk that
+ * will not complete in a human lifetime.</p>
+ *
+ * <p>Hence the second, <b>per-query</b> memo: truncated results are remembered for the duration of
+ * a single top-level query and discarded before the next one. Within one query the context concern
+ * is bounded — whatever a truncated value cost in accuracy, it cost this item only — while across
+ * queries nothing leaks, which is the property the permanent-cache rule was protecting. Entries are
+ * budget-aware: a value computed with little remaining depth is not reused where a deeper walk was
+ * allowed, so memoisation never makes a score worse than the depth cap already made it.</p>
  *
  * <p><b>Not thread-safe.</b> One scorer, one thread, built once during postInit.</p>
  */
@@ -80,6 +95,15 @@ public final class RarityScorer {
 
     /** Memoised results, holding only scores computed with no truncation beneath them. */
     private final Map<String, Eval> cache = new HashMap<>();
+
+    /**
+     * Memoised results for the current top-level query <b>only</b>, holding the scores that a
+     * truncation beneath them barred from {@link #cache}. Cleared at every public entry point, so
+     * nothing in here can ever influence another item's score — see the class doc for why this
+     * two-cache split is what keeps dense cyclic graphs linear without reintroducing the
+     * cross-item contamination the permanent cache refuses.
+     */
+    private final Map<String, Scoped> scoped = new HashMap<>();
 
     /** Keys currently on the recursion stack — the cycle guard. */
     private final Set<String> visiting = new HashSet<>();
@@ -112,7 +136,7 @@ public final class RarityScorer {
 
     /** Score one item. Higher is more valuable. */
     public double score(String key) {
-        return evaluate(key, 0).score;
+        return query(key).score;
     }
 
     /**
@@ -120,7 +144,7 @@ public final class RarityScorer {
      * {@code 1} for something crafted directly from raw materials, and so on.
      */
     public int depth(String key) {
-        return evaluate(key, 0).depth;
+        return query(key).depth;
     }
 
     /**
@@ -130,10 +154,28 @@ public final class RarityScorer {
      * {@code O(recipe edges)} thanks to the memoisation, not {@code O(items × depth)}.</p>
      */
     public Map<String, Double> scoreAll() {
+        return scoreAll(null);
+    }
+
+    /**
+     * {@link #scoreAll()}, reporting progress as it goes.
+     *
+     * @param progress called after each item with how many have been scored so far, ending at
+     *                 {@code graph.keys().size()}. This is how the catalogue drives the loading
+     *                 screen's progress bar without this package knowing what a loading screen
+     *                 is — keep it that way: the callback is plain {@code java.util.function},
+     *                 and nothing Minecraft-shaped may replace it. May be {@code null}.
+     */
+    public Map<String, Double> scoreAll(java.util.function.IntConsumer progress) {
         Collection<String> keys = graph.keys();
         Map<String, Double> scores = new LinkedHashMap<>(Math.max(16, keys.size() * 2));
+        int scored = 0;
         for (String key : keys) {
             scores.put(key, score(key));
+            scored++;
+            if (progress != null) {
+                progress.accept(scored);
+            }
         }
         return scores;
     }
@@ -149,7 +191,8 @@ public final class RarityScorer {
         ItemProfile profile = graph.profile(key);
         CraftingRecipe recipe = graph.recipe(key);
         Double declaredScore = declared.declaredFor(key);
-        Eval result = evaluate(key, 0);
+        // One query: the per-slot breakdown below deliberately reuses the scoped memo this warms.
+        Eval result = query(key);
         StringBuilder out = new StringBuilder();
         out.append(key).append(" -> ").append(round(result.score))
             .append(" (depth ").append(result.depth).append(")\n");
@@ -216,6 +259,12 @@ public final class RarityScorer {
 
     // --- the recursion ---------------------------------------------------------------------------
 
+    /** The top-level entry: one fresh query, with the per-query memo wiped before it starts. */
+    private Eval query(String key) {
+        scoped.clear();
+        return evaluate(key, 0);
+    }
+
     private Eval evaluate(String key, int depth) {
         Eval cached = cache.get(key);
         if (cached != null) {
@@ -223,9 +272,20 @@ public final class RarityScorer {
         }
         if (depth >= weights.maxRecipeDepth || visiting.contains(key)) {
             // Either a cycle or a chain longer than we are willing to walk. Score it as if raw: an
-            // understatement, but a bounded and deterministic one. Never cached — see the class doc.
+            // understatement, but a bounded and deterministic one. Never memoised anywhere, not
+            // even in the scoped map: this value stands for "key, as seen from inside its own
+            // walk", which is not an answer to any other question — and it is O(1) to recreate.
             truncations++;
             return Eval.leaf(rawScore(key));
+        }
+
+        // The remaining walk budget below this point. A truncated result memoised at one budget may
+        // be reused only where the budget is no larger, so reuse never costs accuracy the depth cap
+        // had not already taken.
+        int budget = weights.maxRecipeDepth - depth;
+        Scoped remembered = scoped.get(key);
+        if (remembered != null && remembered.budget >= budget) {
+            return remembered.eval;
         }
 
         visiting.add(key);
@@ -239,6 +299,12 @@ public final class RarityScorer {
         }
         if (truncations == truncationsBefore) {
             cache.put(key, result);
+        }
+        else {
+            // Barred from the permanent cache, but remembered for the rest of THIS query. Without
+            // this, every path through the graph is re-walked and a query above a dense cycle
+            // (any tech pack's metal processing) goes exponential — the postInit hang.
+            scoped.put(key, new Scoped(result, budget));
         }
         return result;
     }
@@ -404,6 +470,24 @@ public final class RarityScorer {
         static Eval crafted(double cost, double depthBonus, int depth) {
             double clamped = Math.max(0.0D, cost);
             return new Eval(cost + depthBonus, clamped, depth);
+        }
+    }
+
+    /**
+     * A truncation-tainted result in the per-query memo, tagged with the walk budget it was
+     * computed under. It answers later lookups only at that budget or less; a lookup with more
+     * budget recomputes, because the deeper walk might genuinely do better.
+     */
+    private static final class Scoped {
+
+        final Eval eval;
+
+        /** Remaining recursion depth at the time this was computed. */
+        final int budget;
+
+        Scoped(Eval eval, int budget) {
+            this.eval = eval;
+            this.budget = budget;
         }
     }
 }

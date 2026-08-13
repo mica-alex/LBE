@@ -23,6 +23,7 @@ import net.minecraft.item.crafting.Ingredient;
 import net.minecraft.util.NonNullList;
 // 1.12.2 keeps ForgeRegistries under fml.common.registry; the net.minecraftforge.registries package
 // every modern tutorial imports from is 1.13+ and does not exist here.
+import net.minecraftforge.fml.common.ProgressManager;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import net.minecraftforge.oredict.OreDictionary;
 
@@ -82,6 +83,14 @@ public final class ForgeItemGraph implements ItemGraph {
         List<String> lootableKeys = new ArrayList<>();
         int excluded = 0;
 
+        // Two coarse steps, not one per item. The per-item counts here come from iterating live
+        // registries, and ProgressManager.pop throws on a step-count mismatch — a bar that can
+        // crash the load if a registry's size disagrees with its iterator is not worth a smoother
+        // animation. The scoring bar in LootCatalog, which owns its own loop, does the fine-grained
+        // part. (fml.common, so server-safe — see the note in LootCatalog.rebuild.)
+        ProgressManager.ProgressBar bar = ProgressManager.push("LBE: reading registries", 2);
+        bar.step("item variants");
+
         for (Item item : ForgeRegistries.ITEMS) {
             if (item == null || item.getRegistryName() == null) {
                 continue;
@@ -102,7 +111,11 @@ public final class ForgeItemGraph implements ItemGraph {
             }
         }
 
+        Lbe.LOGGER.info("Profiled {} item variants ({} blacklisted); indexing recipes...",
+            profiles.size(), excluded);
+        bar.step("recipes");
         Map<String, CraftingRecipe> recipes = collectRecipes(profiles);
+        ProgressManager.pop(bar);
         Lbe.LOGGER.info("Registry snapshot: {} item variants ({} blacklisted), {} recipes",
             profiles.size(), excluded, recipes.size());
         return new ForgeItemGraph(profiles, recipes, templates, lootableKeys, excluded);
