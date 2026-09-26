@@ -118,6 +118,7 @@ an override. (Usually the third.)
 /casino limit [amount|off]   see or set your daily loss limit (raising it waits 24 hours)
 /casino exclude <days> confirm   bar yourself from the casino; cannot be undone early
 /casino lift <player>   end a player's exclusion (operators only)
+/casino clearlimit <player>   remove a player's personal loss limit at once (operators only)
 ```
 
 ## Building

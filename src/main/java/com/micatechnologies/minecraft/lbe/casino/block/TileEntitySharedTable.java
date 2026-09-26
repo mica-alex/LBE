@@ -120,9 +120,9 @@ public class TileEntitySharedTable extends TileEntityCasinoMachine implements IT
         long seconds = Math.max(1L, (closesAt - now + 19L) / 20L);
         com.micatechnologies.minecraft.lbe.network.LbeNetwork.CHANNEL.sendTo(
             com.micatechnologies.minecraft.lbe.network.PacketCasinoResult.notice(game,
-                balanceOf(player), "Bet " + LbeEconomy.format(bet) + " on " + optionName(game, option)
-                    + ". The " + noun(game) + " " + (game == CasinoGame.PIG_RACE ? "starts" : "spins")
-                    + " in " + seconds + "s."),
+                balanceOf(player), LbeEconomy.format(bet) + " on " + optionName(game, option)
+                    + ". " + (game == CasinoGame.PIG_RACE ? "Race" : "Spin") + " in " + seconds
+                    + "s."),
             player);
     }
 

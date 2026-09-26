@@ -82,5 +82,11 @@ class ResponsiblePlayTest {
         assertTrue(play.spend(ME, commonBox));
         assertEquals(0, play.view(ME, NOON).points());
         assertEquals(2_000, ResponsiblePlay.pointsFor(10.0, 0.05), "rates above the cap are capped");
+        // The rate as the config file actually delivers it: a float, not exactly 0.005.
+        double fromConfig = (float) 0.005;
+        assertEquals(2_000, ResponsiblePlay.pointsFor(10.0, fromConfig));
+        assertEquals(8_000, ResponsiblePlay.pointsFor(40.0, fromConfig));
+        assertEquals(30_000, ResponsiblePlay.pointsFor(150.0, fromConfig));
+        assertEquals(120_000, ResponsiblePlay.pointsFor(600.0, fromConfig));
     }
 }

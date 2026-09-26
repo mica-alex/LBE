@@ -81,7 +81,8 @@ public class TileEntityLootVendor extends TileEntity {
         Long until = pending.get(player.getUniqueID());
         if (until == null || now > until) {
             pending.put(player.getUniqueID(), now + CONFIRM_TICKS);
-            status(player, TextFormatting.GOLD, "Right-click again to buy a ", tierName(),
+            status(player, TextFormatting.GOLD, "Right-click again to buy " + article() + " ",
+                tierName(),
                 " box for " + LbeEconomy.format(LbeConfig.boxPrice(tier)));
             return;
         }
@@ -111,10 +112,15 @@ public class TileEntityLootVendor extends TileEntity {
         }
         world.playSound(null, pos, SoundEvents.ENTITY_ITEM_PICKUP, SoundCategory.BLOCKS, 0.8F, 1.0F);
         world.playSound(null, pos, SoundEvents.BLOCK_NOTE_CHIME, SoundCategory.BLOCKS, 0.6F, 1.4F);
-        status(player, TextFormatting.GREEN, "Bought a ", tierName(),
+        status(player, TextFormatting.GREEN, "Bought " + article() + " ", tierName(),
             " box for " + LbeEconomy.format(price));
         Lbe.LOGGER.info("[casino] {} bought a {} loot box for {}", player.getName(), tier.id(),
             LbeEconomy.format(price));
+    }
+
+    /** "an Uncommon", "a Rare". */
+    private String article() {
+        return "aeiou".indexOf(Character.toLowerCase(tier.id().charAt(0))) >= 0 ? "an" : "a";
     }
 
     private TextComponentTranslation tierName() {

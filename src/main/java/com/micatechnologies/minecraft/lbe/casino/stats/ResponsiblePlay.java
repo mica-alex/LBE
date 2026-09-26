@@ -123,6 +123,13 @@ public final class ResponsiblePlay {
      * @return null when the bet may go ahead
      */
     public String refusal(UUID id, double amount, double serverCap, long now) {
+        return refusal(id, amount, serverCap, now,
+            value -> String.format(java.util.Locale.ROOT, "%.2f", value));
+    }
+
+    /** As {@link #refusal(UUID, double, double, long)}, with amounts written by {@code money}. */
+    public String refusal(UUID id, double amount, double serverCap, long now,
+                          java.util.function.DoubleFunction<String> money) {
         Player p = view(id, now);
         if (p.excludedUntil > now) {
             long days = (p.excludedUntil - now + DAY_MILLIS - 1) / DAY_MILLIS;
@@ -132,8 +139,7 @@ public final class ResponsiblePlay {
         double limit = effectiveLimit(p, serverCap);
         if (limit >= 0.0 && p.lossToday + amount > limit + 1e-9) {
             return "That bet could take you past your daily loss limit of "
-                + String.format(java.util.Locale.ROOT, "%.2f", limit)
-                + ". It resets at midnight UTC.";
+                + money.apply(limit) + ". It resets at midnight UTC.";
         }
         return null;
     }
@@ -168,7 +174,10 @@ public final class ResponsiblePlay {
 
     /** Points a reward costs: its money value divided by the comp rate. */
     public static long pointsFor(double value, double compRate) {
-        double rate = Math.min(MAX_COMP_RATE, compRate);
+        // Config stores the rate as a float, so 0.005 arrives as 0.00499999988...; dividing by that
+        // made a $40 box cost 8,001 points. Rounding the rate back to what was meant fixes every
+        // price at once, where a tolerance on the quotient only fixed the small ones.
+        double rate = Math.min(MAX_COMP_RATE, Math.round(compRate * 1.0e7) / 1.0e7);
         return rate <= 0.0 ? Long.MAX_VALUE : (long) Math.ceil(value / rate);
     }
 
@@ -210,6 +219,13 @@ public final class ResponsiblePlay {
         Player p = view(id, now);
         p.excludedUntil = Math.max(p.excludedUntil, now + days * DAY_MILLIS);
         return p.excludedUntil;
+    }
+
+    /** Operator: removes a player's personal limit at once, waiting raise and all. */
+    public void clearLimit(UUID id) {
+        Player p = player(id);
+        p.limit = -1.0;
+        p.hasPending = false;
     }
 
     /** Operator: ends an exclusion. */

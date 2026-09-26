@@ -288,7 +288,9 @@ public class GuiCasinoMachine extends GuiScreen {
                 // The dealer's row, then up to two hands of the player's.
                 return 64;
             case CRAPS:
-                return 44;
+                // The dice (8-24), the point under them (28-36), then clear space above the
+                // "You called" line, which is drawn 7 units inside the bottom of this area.
+                return 52;
             case MINES:
                 // Four rows of six, plus a little under them.
                 return (MinesGame.GRID_SIZE / 6) * 18 + 4;
@@ -615,7 +617,10 @@ public class GuiCasinoMachine extends GuiScreen {
         if (game == CasinoGame.MINES) {
             optionA = mineCount;   // the board's danger, not a menu index
         }
-        lastCallLabel = option == null ? "" : option.label;
+        // Rolling on a craps point is not a new call: keep showing the bet that was made.
+        if (!(game == CasinoGame.CRAPS && awaitingChoice)) {
+            lastCallLabel = option == null ? "" : option.label;
+        }
         int[] numbers = new int[picks.size()];
         int i = 0;
         for (int pick : picks) {
@@ -765,9 +770,11 @@ public class GuiCasinoMachine extends GuiScreen {
                     : settled == null || settled.stage() == PacketCasinoResult.Stage.BALANCE ? "—"
                     : settled.reveal(0, 0) + "  " + settled.reveal(1, 0);
                 drawBigText(centre, top + 8, dice);
-                int point = settled == null ? 0 : settled.reveal(2, 0);
+                // The point matters only while the round is open; once settled it is history.
+                int point = settled == null || settled.stage() != PacketCasinoResult.Stage.DEALT
+                    ? 0 : settled.reveal(2, 0);
                 if (point > 0 && !animating) {
-                    drawCenteredString(fontRenderer, "POINT " + point, centre, top + 32, 0xFFD54F);
+                    drawCenteredString(fontRenderer, "POINT " + point, centre, top + 28, 0xFFD54F);
                 }
                 break;
             }

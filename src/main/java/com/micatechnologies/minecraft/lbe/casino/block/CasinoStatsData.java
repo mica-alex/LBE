@@ -64,7 +64,8 @@ public class CasinoStatsData extends WorldSavedData {
 
     /** Why a player may not stake {@code amount} right now, or null if they may. */
     public String refusal(UUID id, double amount) {
-        return responsible.refusal(id, amount, LbeConfig.dailyLossCap, System.currentTimeMillis());
+        return responsible.refusal(id, amount, LbeConfig.dailyLossCap, System.currentTimeMillis(),
+            com.micatechnologies.minecraft.lbe.casino.economy.LbeEconomy::format);
     }
 
     /** Anything that changes the responsible-play records marks the save. */

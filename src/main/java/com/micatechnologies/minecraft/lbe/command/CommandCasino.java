@@ -44,7 +44,7 @@ public class CommandCasino extends CommandBase {
     @Override
     public String getUsage(ICommandSender sender) {
         return "/casino <stats [player]|top|comps|redeem <tier>|limit [amount|off]"
-            + "|exclude <days> confirm|lift <player>>";
+            + "|exclude <days> confirm|lift <player>|clearlimit <player>>";
     }
 
     @Override
@@ -80,6 +80,8 @@ public class CommandCasino extends CommandBase {
             exclude(sender, data, args);
         } else if ("lift".equals(subcommand)) {
             lift(server, sender, data, args);
+        } else if ("clearlimit".equals(subcommand)) {
+            clearLimit(server, sender, data, args);
         } else {
             throw new WrongUsageException(getUsage(sender));
         }
@@ -116,11 +118,13 @@ public class CommandCasino extends CommandBase {
             CasinoGame game = CasinoGame.byRegistryName(entry.getKey());
             String name = game == null ? entry.getKey() : game.displayName();
             send(sender, TextFormatting.WHITE, String.format(java.util.Locale.ROOT,
-                "  %s: %d rounds, staked %s, %s", name, tally.rounds(),
+                "  %s: %d round%s, staked %s, %s", name, tally.rounds(),
+                tally.rounds() == 1 ? "" : "s",
                 LbeEconomy.format(tally.staked()), signed(tally.net())));
         }
         send(sender, TextFormatting.YELLOW, String.format(java.util.Locale.ROOT,
-            "  Overall: %d rounds, staked %s, %s. Best round paid %s.", total.rounds(),
+            "  Overall: %d round%s, staked %s, %s. Best round paid %s.", total.rounds(),
+            total.rounds() == 1 ? "" : "s",
             LbeEconomy.format(total.staked()), signed(total.net()),
             LbeEconomy.format(total.biggestReturn())));
     }
@@ -270,26 +274,44 @@ public class CommandCasino extends CommandBase {
 
     private void lift(MinecraftServer server, ICommandSender sender, CasinoStatsData data,
                       String[] args) throws CommandException {
-        if (!sender.canUseCommand(LOOK_UP_OTHERS, getName())) {
-            throw new CommandException("Only operators can lift an exclusion.");
-        }
-        if (args.length < 2) {
-            throw new WrongUsageException("/casino lift <player>");
-        }
-        UUID id;
-        EntityPlayer online = server.getPlayerList().getPlayerByUsername(args[1]);
-        if (online != null) {
-            id = online.getUniqueID();
-        } else {
-            Map.Entry<UUID, CasinoLedger.Player> known = data.ledger().playerNamed(args[1]);
-            if (known == null) {
-                throw new CommandException("No record of a player called " + args[1] + ".");
-            }
-            id = known.getKey();
-        }
+        UUID id = operatorTarget(server, sender, data, args, "lift");
         data.responsible().lift(id);
         data.changed();
         send(sender, TextFormatting.GREEN, "Lifted " + args[1] + "'s exclusion.");
+    }
+
+    /**
+     * Operator: removes a player's personal loss limit at once. A player's own raise waits a day
+     * on purpose; this is for the cases that wait should not cover, like a limit set by mistake.
+     */
+    private void clearLimit(MinecraftServer server, ICommandSender sender, CasinoStatsData data,
+                            String[] args) throws CommandException {
+        UUID id = operatorTarget(server, sender, data, args, "clearlimit");
+        data.responsible().clearLimit(id);
+        data.changed();
+        send(sender, TextFormatting.GREEN, "Cleared " + args[1] + "'s personal loss limit. The "
+            + "server's cap, if any, still applies.");
+    }
+
+    /** The player an operator-only subcommand is aimed at, online or known to the ledger. */
+    private UUID operatorTarget(MinecraftServer server, ICommandSender sender,
+                                CasinoStatsData data, String[] args, String subcommand)
+            throws CommandException {
+        if (!sender.canUseCommand(LOOK_UP_OTHERS, getName())) {
+            throw new CommandException("Only operators can use /casino " + subcommand + ".");
+        }
+        if (args.length < 2) {
+            throw new WrongUsageException("/casino " + subcommand + " <player>");
+        }
+        EntityPlayer online = server.getPlayerList().getPlayerByUsername(args[1]);
+        if (online != null) {
+            return online.getUniqueID();
+        }
+        Map.Entry<UUID, CasinoLedger.Player> known = data.ledger().playerNamed(args[1]);
+        if (known == null) {
+            throw new CommandException("No record of a player called " + args[1] + ".");
+        }
+        return known.getKey();
     }
 
     /** A name as the public board shows it: the name, unless the server keeps them private. */
@@ -313,12 +335,13 @@ public class CommandCasino extends CommandBase {
                                           String[] args, @Nullable BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args, "stats", "top", "comps", "redeem",
-                "limit", "exclude", "lift");
+                "limit", "exclude", "lift", "clearlimit");
         }
         if (args.length == 2 && "redeem".equalsIgnoreCase(args[0])) {
             return getListOfStringsMatchingLastWord(args, "common", "uncommon", "rare", "legendary");
         }
-        if (args.length == 2 && "lift".equalsIgnoreCase(args[0])
+        if (args.length == 2 && ("lift".equalsIgnoreCase(args[0])
+                || "clearlimit".equalsIgnoreCase(args[0]))
                 && sender.canUseCommand(LOOK_UP_OTHERS, getName())) {
             return getListOfStringsMatchingLastWord(args, server.getOnlinePlayerNames());
         }
