@@ -271,6 +271,17 @@ def main():
     write_png(os.path.join(OUT_DIR, "casino_leaderboard_side.png"), board_side)
     written += 2
     print("wrote casino_leaderboard")
+
+    # The progressive sign: the same frame round a deep red board, so a bank of slots reads as
+    # having its own jackpot at a glance.
+    sign = grid((0x3A, 0x08, 0x10))
+    frame(sign, GOLD)
+    box(sign, 1, 1, 14, 1, GOLD_LIT)
+    box(sign, 1, 14, 14, 14, GOLD_DARK)
+    write_png(os.path.join(OUT_DIR, "progressive_sign_front.png"), sign)
+    write_png(os.path.join(OUT_DIR, "progressive_sign_side.png"), board_side)
+    written += 2
+    print("wrote progressive_sign")
     print("%d textures written" % written)
 
 

@@ -247,12 +247,26 @@ public class TileEntityCasinoMachine extends TileEntity {
      */
     private void settle(EntityPlayerMP player, CasinoGame game, Wager wager, GameResult result,
                         double bet, int revealTicks) {
-        double totalReturn = round(bet * result.totalReturnMultiplier());
+        double spinReturn = round(bet * result.totalReturnMultiplier());
+        // The progressive: slot machines only. Three sevens win the pool on top of the spin. The
+        // pool is only read here; it is fed and emptied below, once the payout has gone through,
+        // so a failed settlement leaves it exactly where it was.
+        CasinoStatsData stats = CasinoStatsData.get(world);
+        boolean progressive = game == CasinoGame.SLOTS && LbeConfig.progressiveEnabled;
+        boolean topPrize = result instanceof SlotSpin && ((SlotSpin) result).isJackpot();
+        double bonus = progressive && topPrize ? stats.progressive().pool() : 0.0;
+        double totalReturn = spinReturn + bonus;
         boolean settled = totalReturn > 0.0 ? wager.payOut(totalReturn) : wager.loseToHouse();
         if (!settled) {
             // The bank has already logged why and left the hold open, so the money is not lost.
             reject(player, "Your bet could not be settled. It is safe — tell an operator.");
             return;
+        }
+        if (progressive) {
+            stats.contributeProgressive(bet);
+            if (bonus > 0.0) {
+                stats.collectProgressive();
+            }
         }
         LbeNetwork.CHANNEL.sendTo(new PacketCasinoResult(game, result.totalReturnMultiplier(),
             totalReturn, balanceOf(player), revealFor(game, result), result.describe()), player);
@@ -280,10 +294,9 @@ public class TileEntityCasinoMachine extends TileEntity {
             earned.add("nerves_of_steel");
         }
         ITextComponent announcement = LbeConfig.announceJackpots && fanfare == CasinoFanfare.JACKPOT
-            ? announcement(player, game, totalReturn) : null;
+            ? announcement(player, game, totalReturn, bonus) : null;
         // The ledger records money that has already moved, so totals are written now. A big win
         // only reaches the public board at the reveal, like everything else the floor notices.
-        CasinoStatsData stats = CasinoStatsData.get(world);
         stats.record(player.getUniqueID(), player.getName(), game.registryName(), bet, totalReturn);
         Runnable atReveal = null;
         if (fanfare == CasinoFanfare.BIG_WIN || fanfare == CasinoFanfare.JACKPOT) {
@@ -693,9 +706,13 @@ public class TileEntityCasinoMachine extends TileEntity {
     }
 
     private static ITextComponent announcement(EntityPlayerMP player, CasinoGame game,
-                                               double payout) {
+                                               double payout, double progressive) {
         String text = player.getName() + " won " + LbeEconomy.format(payout) + " at "
             + game.displayName() + "!";
+        if (progressive > 0.0) {
+            text += " That includes the progressive jackpot of " + LbeEconomy.format(progressive)
+                + ".";
+        }
         if (LbeConfig.announceJackpotLocation) {
             net.minecraft.util.math.BlockPos at = player.getPosition();
             text += " (" + at.getX() + ", " + at.getY() + ", " + at.getZ() + ")";

@@ -12,6 +12,7 @@ import com.micatechnologies.minecraft.lbe.casino.highlow.HighLowGame;
 import com.micatechnologies.minecraft.lbe.casino.keno.KenoGame;
 import com.micatechnologies.minecraft.lbe.casino.plinko.PlinkoGame;
 import com.micatechnologies.minecraft.lbe.casino.roulette.RouletteGame;
+import com.micatechnologies.minecraft.lbe.casino.slots.ProgressiveJackpot;
 import com.micatechnologies.minecraft.lbe.casino.slots.SlotPaytable;
 import com.micatechnologies.minecraft.lbe.casino.war.WarGame;
 import org.junit.jupiter.api.DisplayName;
@@ -48,6 +49,32 @@ class HouseEdgeTest {
     void slots() {
         assertEquals(0.8403710858105805, SlotPaytable.returnToPlayer(), 1.0e-12);
         assertTrue(SlotPaytable.returnToPlayer() < BREAK_EVEN);
+    }
+
+    @Test
+    @DisplayName("the progressive adds its share to slots and cannot push them past break-even")
+    void slotsWithProgressive() {
+        // Every unit fed into the pool is eventually paid back out, so the pool's share lands on
+        // top of the paytable's return. The default 1% makes slots about 85%.
+        assertEquals(0.8503710858105805,
+            ProgressiveJackpot.slotsReturnWith(ProgressiveJackpot.DEFAULT_SHARE), 1.0e-12);
+        // The most a server can configure still leaves the house its edge, inside the band.
+        double worst = ProgressiveJackpot.slotsReturnWith(1.0);   // clamped to MAX_SHARE
+        assertEquals(SlotPaytable.returnToPlayer() + ProgressiveJackpot.MAX_SHARE, worst, 1.0e-12);
+        assertTrue(worst < 0.95, "slots with the largest progressive share return " + worst);
+    }
+
+    @Test
+    @DisplayName("the pool pays whole cents, only after it is collected, and reseeds")
+    void progressivePool() {
+        ProgressiveJackpot pot = new ProgressiveJackpot(50.0);
+        pot.contribute(10.0, ProgressiveJackpot.DEFAULT_SHARE);
+        pot.contribute(0.5, ProgressiveJackpot.DEFAULT_SHARE);
+        assertEquals(50.10, pot.pool(), 1.0e-9);           // 50.105 rounds DOWN to the cent
+        assertEquals(50.10, pot.collect(50.0), 1.0e-9);
+        assertEquals(50.0, pot.pool(), 1.0e-9);
+        pot.contribute(10.0, -1.0);                         // a negative share adds nothing
+        assertEquals(50.0, pot.pool(), 1.0e-9);
     }
 
     @Test

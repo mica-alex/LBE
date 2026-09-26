@@ -102,6 +102,7 @@ public class LbeClientProxy extends LbeCommonProxy {
             bindModel(machine);
         }
         bindModel(com.micatechnologies.minecraft.lbe.casino.block.CasinoBlocks.leaderboardItem());
+        bindModel(com.micatechnologies.minecraft.lbe.casino.block.CasinoBlocks.progressiveSignItem());
     }
 
     private static void bindModel(Item item) {

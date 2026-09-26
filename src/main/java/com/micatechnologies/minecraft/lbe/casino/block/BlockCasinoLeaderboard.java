@@ -43,9 +43,14 @@ public class BlockCasinoLeaderboard extends Block {
     };
 
     public BlockCasinoLeaderboard() {
+        this("casino_leaderboard");
+    }
+
+    /** For boards that show something else on the same kind of panel. */
+    protected BlockCasinoLeaderboard(String name) {
         super(Material.IRON);
-        setRegistryName(LbeConstants.MOD_NAMESPACE, "casino_leaderboard");
-        setTranslationKey(LbeConstants.MOD_NAMESPACE + ".casino_leaderboard");
+        setRegistryName(LbeConstants.MOD_NAMESPACE, name);
+        setTranslationKey(LbeConstants.MOD_NAMESPACE + "." + name);
         setCreativeTab(LbeTab.LBE_TAB);
         setHardness(2.0F);
         setResistance(10.0F);

@@ -18,7 +18,8 @@ import net.minecraft.util.ITickable;
 import net.minecraftforge.common.util.Constants;
 
 /**
- * Keeps a leaderboard's lines in step with the ledger, and hands them to clients to draw.
+ * Keeps a leaderboard's lines in step with the ledger, and hands them to clients to draw. The same
+ * tile entity serves a {@link BlockProgressiveSign}, whose single line is the progressive pool.
  *
  * <p>The server builds the lines — names, formatted amounts, the privacy setting applied — so a
  * client is only ever sent what the board shows. It checks every couple of seconds whether the
@@ -53,14 +54,26 @@ public class TileEntityCasinoLeaderboard extends TileEntity implements ITickable
         if (ticks++ % CHECK_EVERY != 0) {
             return;
         }
-        CasinoLedger ledger = CasinoStatsData.get(world).ledger();
-        boolean names = LbeConfig.leaderboardShowsNames;
-        if (ledger.version() == sentVersion && names == sentNames) {
-            return;
+        CasinoStatsData data = CasinoStatsData.get(world);
+        if (isProgressiveSign()) {
+            long version = data.progressive().version();
+            if (version == sentVersion && ticks > 1) {
+                return;
+            }
+            sentVersion = version;
+            bigWins = Collections.singletonList(LbeConfig.progressiveEnabled
+                ? LbeEconomy.format(data.progressive().pool()) : "CLOSED");
+            topWinners = Collections.emptyList();
+        } else {
+            CasinoLedger ledger = data.ledger();
+            boolean names = LbeConfig.leaderboardShowsNames;
+            if (ledger.version() == sentVersion && names == sentNames) {
+                return;
+            }
+            sentVersion = ledger.version();
+            sentNames = names;
+            rebuild(ledger, names);
         }
-        sentVersion = ledger.version();
-        sentNames = names;
-        rebuild(ledger, names);
         IBlockState state = world.getBlockState(pos);
         world.notifyBlockUpdate(pos, state, state, 2);
     }
@@ -79,6 +92,10 @@ public class TileEntityCasinoLeaderboard extends TileEntity implements ITickable
         }
         bigWins = wins;
         topWinners = top;
+    }
+
+    private boolean isProgressiveSign() {
+        return world != null && world.getBlockState(pos).getBlock() instanceof BlockProgressiveSign;
     }
 
     private static String name(String name, boolean shown) {

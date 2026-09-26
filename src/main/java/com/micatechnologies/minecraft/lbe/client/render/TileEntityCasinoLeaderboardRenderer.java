@@ -1,6 +1,7 @@
 package com.micatechnologies.minecraft.lbe.client.render;
 
 import com.micatechnologies.minecraft.lbe.casino.block.BlockCasinoLeaderboard;
+import com.micatechnologies.minecraft.lbe.casino.block.BlockProgressiveSign;
 import com.micatechnologies.minecraft.lbe.casino.block.TileEntityCasinoLeaderboard;
 import java.util.List;
 import net.minecraft.block.state.IBlockState;
@@ -56,15 +57,39 @@ public class TileEntityCasinoLeaderboardRenderer
         GlStateManager.disableCull();
         OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
 
-        float top = -28.0F;
-        top = section(font, "BIG WINS", tile.bigWins(), "Nobody yet", top);
-        section(font, "TOP WINNERS", tile.topWinners(), "Nobody ahead", top + 2.0F);
+        if (state.getBlock() instanceof BlockProgressiveSign) {
+            drawProgressive(font, tile.bigWins(), tile.getWorld().getTotalWorldTime() + partialTicks);
+        } else {
+            float top = -28.0F;
+            top = section(font, "BIG WINS", tile.bigWins(), "Nobody yet", top);
+            section(font, "TOP WINNERS", tile.topWinners(), "Nobody ahead", top + 2.0F);
+        }
 
         GlStateManager.enableCull();
         GlStateManager.enableLighting();
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         GlStateManager.popMatrix();
         OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, lastX, lastY);
+    }
+
+    /** The progressive pool, big, with its heading gently pulsing between gold and white. */
+    private static void drawProgressive(FontRenderer font, java.util.List<String> lines,
+                                        double time) {
+        boolean bright = ((long) (time / 10.0D)) % 2L == 0L;
+        textScaled(font, "PROGRESSIVE", -16.0F, bright ? 0xFFD040 : 0xFFFFFF, 0.6F);
+        String amount = lines.isEmpty() ? "..." : lines.get(0);
+        // As large as fits the board's width, up to 1.4x.
+        float scale = Math.min(1.4F, 54.0F / Math.max(1, font.getStringWidth(amount)));
+        textScaled(font, amount, -4.0F, 0x7CFC7C, scale);
+        textScaled(font, "JACKPOT", 12.0F, bright ? 0xFFFFFF : 0xFFD040, 0.6F);
+    }
+
+    private static void textScaled(FontRenderer font, String text, float y, int rgb, float scale) {
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(-font.getStringWidth(text) * scale / 2.0F, y, 0.5F);
+        GlStateManager.scale(scale, scale, 1.0F);
+        font.drawString(text, 0, 0, rgb);
+        GlStateManager.popMatrix();
     }
 
     /** A heading and its rows. Returns where the next section starts. */

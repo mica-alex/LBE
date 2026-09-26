@@ -1,5 +1,7 @@
 package com.micatechnologies.minecraft.lbe.casino.block;
 
+import com.micatechnologies.minecraft.lbe.LbeConfig;
+import com.micatechnologies.minecraft.lbe.casino.slots.ProgressiveJackpot;
 import com.micatechnologies.minecraft.lbe.casino.stats.CasinoLedger;
 import java.util.Map;
 import java.util.UUID;
@@ -16,6 +18,10 @@ import net.minecraftforge.common.util.Constants;
  * <p>One ledger per server, not per dimension: it lives in the global map storage, so a casino in
  * the Nether and one in the Overworld add up to the same player's totals.
  *
+ * <p>It also holds the slots' {@link ProgressiveJackpot}. The two share a file for convenience
+ * only: the ledger is history nothing reads back, while the pool is money-bearing state that
+ * decides what a jackpot pays.
+ *
  * <p>Server thread only.
  */
 public class CasinoStatsData extends WorldSavedData {
@@ -23,6 +29,8 @@ public class CasinoStatsData extends WorldSavedData {
     private static final String NAME = "lbe_casino_stats";
 
     private final CasinoLedger ledger = new CasinoLedger();
+    private final ProgressiveJackpot progressive =
+        new ProgressiveJackpot(LbeConfig.progressiveSeed);
 
     /** Called reflectively by {@link MapStorage} when loading; the name must be accepted as is. */
     public CasinoStatsData(String name) {
@@ -42,6 +50,23 @@ public class CasinoStatsData extends WorldSavedData {
 
     public CasinoLedger ledger() {
         return ledger;
+    }
+
+    public ProgressiveJackpot progressive() {
+        return progressive;
+    }
+
+    /** Feeds a slot stake's share into the pool and marks the save dirty. */
+    public void contributeProgressive(double stake) {
+        progressive.contribute(stake, LbeConfig.progressiveShare);
+        markDirty();
+    }
+
+    /** Empties the pool into a win that has been paid, reseeds it, and marks the save dirty. */
+    public double collectProgressive() {
+        double won = progressive.collect(LbeConfig.progressiveSeed);
+        markDirty();
+        return won;
     }
 
     /** Records a settled round and marks the save dirty. */
@@ -75,6 +100,9 @@ public class CasinoStatsData extends WorldSavedData {
                     game.getDouble("staked"), game.getDouble("returned"),
                     game.getDouble("biggest"));
             }
+        }
+        if (tag.hasKey("progressive")) {
+            progressive.restore(tag.getDouble("progressive"));
         }
         NBTTagList wins = tag.getTagList("bigWins", Constants.NBT.TAG_COMPOUND);
         for (int i = 0; i < wins.tagCount(); i++) {
@@ -115,6 +143,7 @@ public class CasinoStatsData extends WorldSavedData {
             wins.appendTag(entry);
         }
         tag.setTag("bigWins", wins);
+        tag.setDouble("progressive", progressive.exactPool());
         return tag;
     }
 }

@@ -203,6 +203,14 @@ time, which is the most expensive thing a block can ask for.
 drops, a lit tile wanders the mines board, keno flashes PLAY. The last round stays up for thirty
 seconds before this starts.
 
+**The progressive jackpot.** Slot machines share one pool (`casino/slots/ProgressiveJackpot`,
+saved with the ledger). `progressiveShare` of each slot stake (default 1%, capped at 5%) feeds
+it, and three sevens win it on top of the spin's payout; it then reseeds at `progressiveSeed`.
+Every unit fed in is eventually paid back out, so the share is added straight to slots' return,
+and `HouseEdgeTest` pins both the default (85.0%) and the cap. The paytable was deliberately not
+retuned to absorb it. The pool is only fed and emptied **after** a payout succeeds, so a failed
+settlement leaves it untouched. A progressive sign block shows the live pool.
+
 **The ledger and the leaderboard.** Every settled round is added to a per-player, per-game ledger
 (`casino/stats/CasinoLedger`, pure; saved as `data/lbe_casino_stats.dat` by `CasinoStatsData`). It
 records money that has already moved, and nothing that decides a game reads it. A big win joins
@@ -224,7 +232,7 @@ another is: pure logic in its own package, a constant in `CasinoGame`, a branch 
 
 | Game | Returns | Ported from | Rules changed? |
 |---|---|---|---|
-| Slots | 84.0% | `slots_game.py` | no |
+| Slots | 84.0% + 1% progressive = 85.0% | `slots_game.py` | no; the progressive is added on top |
 | Roulette | 97.3% | `roulette_game.py` | no |
 | Plinko | 91.4–97.6% | `plinko_game.py` | no |
 | Coin flip | 97.0% | `!coinflip` | **yes** — paid 2×, which is exactly break-even |

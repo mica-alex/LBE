@@ -93,6 +93,15 @@ public final class LbeConfig {
     /** Whether leaderboards and /casino top show players' names, or just "A player". */
     public static boolean leaderboardShowsNames = true;
 
+    /** Whether slot machines share a progressive jackpot. */
+    public static boolean progressiveEnabled = true;
+
+    /** The share of each slot stake that feeds the progressive, clamped to 0..5%. */
+    public static double progressiveShare = 0.01;
+
+    /** What the progressive restarts at after it is won. */
+    public static double progressiveSeed = 50.0;
+
     // --- general ----------------------------------------------------------------------------------
 
     /** Master switch for natural loot-box generation. Off still leaves the boxes placeable by hand. */
@@ -692,6 +701,19 @@ public final class LbeConfig {
             leaderboardShowsNames,
             "Whether leaderboard blocks and /casino top name the players on them. Off shows the "
                 + "amounts as 'A player'. Only players who are ahead are ever listed as winners.");
+        progressiveEnabled = config.getBoolean("progressiveEnabled", CATEGORY_CASINO,
+            progressiveEnabled,
+            "Whether slot machines share a progressive jackpot: a slice of every slot stake feeds a "
+                + "pool that three sevens win on top of the normal payout.");
+        progressiveShare = config.getFloat("progressiveShare", CATEGORY_CASINO,
+            (float) progressiveShare, 0.0F, 0.05F,
+            "Share of each slot stake that feeds the progressive. Every unit is eventually paid "
+                + "back out, so this is added straight to slots' return: 0.01 makes slots about 85%. "
+                + "Capped at 0.05 so slots always keep an edge.");
+        progressiveSeed = config.getFloat("progressiveSeed", CATEGORY_CASINO,
+            (float) progressiveSeed, 0.0F, 1000000.0F,
+            "What the progressive restarts at after it is won. This is new money each time it is "
+                + "won, so keep it modest relative to how much slots see between jackpots.");
 
         if (config.hasChanged()) {
             config.save();

@@ -37,6 +37,10 @@ public final class CasinoBlocks {
     private static BlockCasinoLeaderboard leaderboard;
     private static ItemBlock leaderboardItem;
 
+    /** The progressive jackpot sign, and its item. */
+    private static BlockProgressiveSign progressiveSign;
+    private static ItemBlock progressiveSignItem;
+
     private CasinoBlocks() {
         throw new AssertionError("No instances.");
     }
@@ -49,6 +53,13 @@ public final class CasinoBlocks {
         }
         leaderboard = LbeRegistry.addBlock(new BlockCasinoLeaderboard());
         leaderboardItem = registerItemBlock(leaderboard);
+        progressiveSign = LbeRegistry.addBlock(new BlockProgressiveSign());
+        progressiveSignItem = registerItemBlock(progressiveSign);
+    }
+
+    /** The progressive sign's item form. Null before {@link #init()}. */
+    public static ItemBlock progressiveSignItem() {
+        return progressiveSignItem;
     }
 
     /** The leaderboard's item form. Null before {@link #init()}. */
