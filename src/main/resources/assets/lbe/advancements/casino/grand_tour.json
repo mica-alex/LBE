@@ -1,0 +1,82 @@
+{
+  "parent": "lbe:casino/root",
+  "display": {
+    "icon": {
+      "item": "lbe:roulette_table"
+    },
+    "title": {
+      "translate": "advancements.lbe.casino.grand_tour.title"
+    },
+    "description": {
+      "translate": "advancements.lbe.casino.grand_tour.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "slot_machine": {
+      "trigger": "minecraft:impossible"
+    },
+    "coin_flip_table": {
+      "trigger": "minecraft:impossible"
+    },
+    "war_table": {
+      "trigger": "minecraft:impossible"
+    },
+    "high_low_machine": {
+      "trigger": "minecraft:impossible"
+    },
+    "roulette_table": {
+      "trigger": "minecraft:impossible"
+    },
+    "plinko_machine": {
+      "trigger": "minecraft:impossible"
+    },
+    "keno_machine": {
+      "trigger": "minecraft:impossible"
+    },
+    "baccarat_table": {
+      "trigger": "minecraft:impossible"
+    },
+    "video_poker_machine": {
+      "trigger": "minecraft:impossible"
+    },
+    "mines_machine": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "slot_machine"
+    ],
+    [
+      "coin_flip_table"
+    ],
+    [
+      "war_table"
+    ],
+    [
+      "high_low_machine"
+    ],
+    [
+      "roulette_table"
+    ],
+    [
+      "plinko_machine"
+    ],
+    [
+      "keno_machine"
+    ],
+    [
+      "baccarat_table"
+    ],
+    [
+      "video_poker_machine"
+    ],
+    [
+      "mines_machine"
+    ]
+  ]
+}

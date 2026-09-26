@@ -244,10 +244,50 @@ public class BlockCasinoMachine extends Block {
      * @return the machine, or null if {@code pos} is not part of one.
      */
     @Nullable
-    public static TileEntityCasinoMachine machineAt(World world, BlockPos pos, IBlockState state) {
+    public static TileEntityCasinoMachine machineAt(IBlockAccess world, BlockPos pos,
+                                                   IBlockState state) {
         BlockPos base = state.getValue(HALF) ? pos.down() : pos;
         TileEntity tile = world.getTileEntity(base);
         return tile instanceof TileEntityCasinoMachine ? (TileEntityCasinoMachine) tile : null;
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Redstone: a win is a signal builders can wire to
+    //
+    // For a short while after a win is revealed, both halves of the machine give off redstone power
+    // and a comparator reading scaled by the win (see TileEntityCasinoMachine#signal). Bells, lamps
+    // and doors are then up to whoever builds the casino. Losses give nothing, so wiring stays quiet.
+    // ---------------------------------------------------------------------------------------------
+
+    @Override
+    public boolean canProvidePower(IBlockState state) {
+        return true;
+    }
+
+    @Override
+    public int getWeakPower(IBlockState state, IBlockAccess world, BlockPos pos, EnumFacing side) {
+        TileEntityCasinoMachine machine = machineAt(world, pos, state);
+        return machine == null ? 0 : machine.signal();
+    }
+
+    @Override
+    public boolean hasComparatorInputOverride(IBlockState state) {
+        return true;
+    }
+
+    @Override
+    public int getComparatorInputOverride(IBlockState state, World world, BlockPos pos) {
+        TileEntityCasinoMachine machine = machineAt(world, pos, state);
+        return machine == null ? 0 : machine.signal();
+    }
+
+    /** Scheduled by the tile entity for the moment a win's signal runs out. */
+    @Override
+    public void updateTick(World world, BlockPos pos, IBlockState state, java.util.Random rand) {
+        TileEntityCasinoMachine machine = machineAt(world, pos, state);
+        if (machine != null) {
+            machine.notifySignalChanged();
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -262,9 +302,22 @@ public class BlockCasinoMachine extends Block {
         // them, so the client has to run this too — it is the side that opens the window. Guarding
         // here is the classic 1.12.2 mistake that produces a block which does nothing at all.
         TileEntityCasinoMachine machine = machineAt(world, pos, state);
-        if (machine != null) {
-            machine.onActivated(player, game);
+        if (machine == null) {
+            return true;
         }
+        // Holding a dye recolours the neon trim rather than opening the game. Both sides see the
+        // same held item, so the client knows not to open the screen and the server does the work.
+        net.minecraft.item.ItemStack held = player.getHeldItem(hand);
+        if (held.getItem() == net.minecraft.init.Items.DYE) {
+            if (!world.isRemote) {
+                machine.setTrim(net.minecraft.item.EnumDyeColor.byDyeDamage(held.getMetadata()));
+                if (!player.capabilities.isCreativeMode) {
+                    held.shrink(1);
+                }
+            }
+            return true;
+        }
+        machine.onActivated(player, game);
         return true;
     }
 }

@@ -60,6 +60,12 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
     /** Beyond this, a screen is a few pixels and not worth the draw calls. */
     private static final double MAX_DISTANCE_SQ = 32.0D * 32.0D;
 
+    /** How long a finished round stays on show before the machine goes back to attracting players. */
+    private static final double ATTRACT_AFTER_TICKS = 20.0D * 30.0D;
+
+    /** How long a win's payout floats over the machine. */
+    private static final double PAYOUT_TICKS = 50.0D;
+
     /** Layers, toward the viewer, in screen units. Enough apart not to z-fight at a distance. */
     private static final float Z_BACK = 0.0F;
     private static final float Z_MID = 0.4F;
@@ -99,6 +105,7 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
         }
         GlStateManager.scale(UNIT, -UNIT, UNIT);
         beginScreen();
+        drawTrim(game, tile.trimColour(), round.time);
         drawGame(game, round);
         endScreen();
         GlStateManager.popMatrix();
@@ -106,6 +113,7 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
         drawLamp(game, round);
 
         GlStateManager.popMatrix();
+        drawPayout(game, round, tile.displayPayout(), x, y, z);
         OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, lastX, lastY);
     }
 
@@ -126,6 +134,11 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
         final double sinceResult;
         /** World time plus partial ticks, for idle motion. */
         final double time;
+        /**
+         * True when there is no recent round to show: nothing played yet, the chunk loaded after the
+         * last one, or it was long enough ago. The machine then runs its attract loop instead.
+         */
+        final boolean idle;
 
         Round(TileEntityCasinoMachine tile, double time, float partialTicks) {
             this.show = tile.display();
@@ -136,10 +149,12 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
             this.tick = since;
             this.revealing = since >= 0.0 && since < revealTicks;
             this.sinceResult = since < 0.0 ? -1.0 : since - revealTicks;
+            this.idle = fanfare == null || since < 0.0 || sinceResult > ATTRACT_AFTER_TICKS;
         }
 
+        /** Whether there is a round to show; false means the attract loop. */
         boolean played() {
-            return fanfare != null;
+            return !idle;
         }
 
         /** Whether the result is on show: something has been played and it is not still spinning. */
@@ -211,7 +226,8 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
             } else if (round.played()) {
                 index = SlotSymbol.byIndex(round.value(reel, 0)).index();
             } else {
-                index = reel;
+                // Attract: the reels drift, one step at a time, out of step with each other.
+                index = (int) (round.time / 16.0D + reel * 3) % symbols;
             }
             float left = -19.0F + reel * 13.0F;
             symbol(index, symbols, left, -6.0F, left + 12.0F, 6.0F);
@@ -227,10 +243,13 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
         if (round.revealing) {
             // Edge-on and face-on in turn: a coin in the air.
             halfWidth = (float) (9.0D * Math.abs(Math.cos(round.tick * 0.45D)));
+        } else if (!round.played()) {
+            // Attract: a slow, lazy turn.
+            halfWidth = (float) (9.0D * Math.abs(Math.cos(round.time * 0.04D)));
         }
         rect(-halfWidth - 1.0F, -10.0F, halfWidth + 1.0F, 10.0F, 0xFF7A5A10, Z_BACK);
         rect(-halfWidth, -9.0F, halfWidth, 9.0F, 0xFFE0B030, Z_MID);
-        if (!round.revealing) {
+        if (!round.revealing && halfWidth > 4.0F) {
             String face = !round.played() ? "$"
                 : round.value(0, 0) == CoinFlipGame.codeFor(CoinFlipGame.Side.HEADS) ? "H" : "T";
             text(face, 0.0F, -6.0F, 0x5A3A00, 1.6F);
@@ -298,13 +317,14 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
     }
 
     private void drawBaccarat(Round round) {
-        text("PLAYER", -14.0F, -20.0F, 0xF0C040, 0.5F);
-        text("BANKER", -14.0F, 4.0F, 0xF0C040, 0.5F);
+        // Each label sits clear above its own row of cards.
+        text("PLAYER", -14.0F, -24.0F, 0xF0C040, 0.5F);
+        text("BANKER", -14.0F, 0.0F, 0xF0C040, 0.5F);
         int at = 0;
         for (int row = 0; row < 2; row++) {
             int count = round.played() ? Math.min(3, Math.max(0, round.value(at, 0))) : 2;
             at++;
-            float top = row == 0 ? -14.0F : 10.0F;
+            float top = row == 0 ? -12.0F : 11.0F;
             for (int i = 0; i < count; i++) {
                 Card card = round.settled() ? cardOf(round.value(at + i, 0)) : null;
                 card(-2.0F + i * 11.0F, top, 9.0F, 13.0F, card);
@@ -339,13 +359,23 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
             rect(sx - 1.6F, 13.0F, sx + 1.6F, 17.0F,
                 slot == landed ? 0xFFF0A81E : 0xFF3A2A50, Z_MID);
         }
-        if (round.revealing) {
-            // The ball follows the path the server chose, one row at a time.
-            double along = round.progress() * rows;
+        if (round.revealing || !round.played()) {
+            // The ball follows the path the server chose, one row at a time. Idle, it follows a
+            // made-up path every few seconds, to show what the machine does.
+            double along;
+            long cycle = 0L;
+            if (round.revealing) {
+                along = round.progress() * rows;
+            } else {
+                cycle = (long) (round.time / 80.0D);
+                along = (round.time % 80.0D) / 80.0D * rows;
+            }
             int row = (int) Math.min(rows, along);
             int rights = 0;
             for (int i = 0; i < row; i++) {
-                rights += round.value(i, 0) == 1 ? 1 : 0;
+                boolean right = round.revealing ? round.value(i, 0) == 1
+                    : ((cycle * 31L + i * 17L) >> 2 & 1L) == 1L;
+                rights += right ? 1 : 0;
             }
             float bx = (rights - row / 2.0F) * spacing;
             float by = top + (float) along * 3.4F - 2.0F;
@@ -357,6 +387,9 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
         panel(-24, -18, 24, 18);
         text("KENO", 0.0F, -16.0F, 0xF0C040, 0.6F);
         if (!round.played()) {
+            if (((int) (round.time / 10.0D)) % 2 == 0) {
+                text("PLAY", 0.0F, -3.0F, 0xFFFFFF, 1.2F);
+            }
             return;
         }
         int drawn = round.show.length;
@@ -378,6 +411,8 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
             int colour = 0xFF505060;
             if (showMines) {
                 colour = isMine(round, tile) ? 0xFFD03030 : 0xFF2F6A34;
+            } else if (!round.played() && tile == (int) (round.time / 6.0D) % MinesGame.GRID_SIZE) {
+                colour = 0xFFC08A20;   // attract: a lit tile wanders the board
             }
             rect(cx - 3.0F, cy - 3.0F, cx + 3.0F, cy + 3.0F, colour, Z_MID);
         }
@@ -390,6 +425,70 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
             }
         }
         return false;
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Neon trim and the floating payout
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * A glowing outline in the machine's dye colour: round a cabinet's front, or a table's top. Only
+     * drawn once somebody has dyed the machine; a gentle breathing keeps it reading as neon rather
+     * than paint.
+     */
+    private static void drawTrim(CasinoGame game, int rgb, double time) {
+        if (rgb < 0) {
+            return;
+        }
+        float breathe = (float) (0.8D + 0.2D * Math.sin(time * 0.08D));
+        int r = (int) (((rgb >> 16) & 0xFF) * breathe);
+        int g = (int) (((rgb >> 8) & 0xFF) * breathe);
+        int b = (int) ((rgb & 0xFF) * breathe);
+        int argb = 0xFF000000 | (r << 16) | (g << 8) | b;
+        float halfW = game.isTall() ? 27.0F : 31.0F;
+        float halfH = game.isTall() ? 30.0F : 31.0F;
+        float t = 2.0F;
+        rect(-halfW, -halfH, halfW, -halfH + t, argb, Z_BACK);
+        rect(-halfW, halfH - t, halfW, halfH, argb, Z_BACK);
+        rect(-halfW, -halfH, -halfW + t, halfH, argb, Z_BACK);
+        rect(halfW - t, -halfH, halfW, halfH, argb, Z_BACK);
+    }
+
+    /**
+     * "WIN $94.00", rising and fading over the machine just after a win, turned to face whoever is
+     * looking. The text is formatted by the server, which is also what decides whether to send it.
+     */
+    private void drawPayout(CasinoGame game, Round round, String payout, double x, double y,
+                            double z) {
+        if (payout.isEmpty() || round.sinceResult < 0.0 || round.sinceResult > PAYOUT_TICKS) {
+            return;
+        }
+        FontRenderer font = getFontRenderer();
+        if (font == null) {
+            return;
+        }
+        double progress = round.sinceResult / PAYOUT_TICKS;
+        int alpha = (int) (255.0D * (1.0D - progress * progress));
+        if (alpha < 8) {
+            return;
+        }
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(x + 0.5D, y + (game.isTall() ? 2.55D : 1.45D) + progress * 0.6D,
+            z + 0.5D);
+        // Billboarded like a name tag.
+        GlStateManager.rotate(-rendererDispatcher.entityYaw, 0.0F, 1.0F, 0.0F);
+        GlStateManager.rotate(rendererDispatcher.entityPitch, 1.0F, 0.0F, 0.0F);
+        GlStateManager.scale(-0.025F, -0.025F, 0.025F);
+        GlStateManager.disableLighting();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA,
+            GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 240.0F, 240.0F);
+        font.drawString(payout, -font.getStringWidth(payout) / 2, 0, (alpha << 24) | 0xFFD040);
+        GlStateManager.disableBlend();
+        GlStateManager.enableLighting();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.popMatrix();
     }
 
     // ---------------------------------------------------------------------------------------------

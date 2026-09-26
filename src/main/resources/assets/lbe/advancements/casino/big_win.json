@@ -1,0 +1,23 @@
+{
+  "parent": "lbe:casino/first_win",
+  "display": {
+    "icon": {
+      "item": "minecraft:gold_ingot"
+    },
+    "title": {
+      "translate": "advancements.lbe.casino.big_win.title"
+    },
+    "description": {
+      "translate": "advancements.lbe.casino.big_win.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "earned": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

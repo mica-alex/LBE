@@ -1,0 +1,23 @@
+{
+  "parent": "lbe:casino/root",
+  "display": {
+    "icon": {
+      "item": "lbe:mines_machine"
+    },
+    "title": {
+      "translate": "advancements.lbe.casino.nerves_of_steel.title"
+    },
+    "description": {
+      "translate": "advancements.lbe.casino.nerves_of_steel.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "earned": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

@@ -84,6 +84,12 @@ public final class LbeConfig {
     /** Whether a jackpot announcement says where the machine is. */
     public static boolean announceJackpotLocation = false;
 
+    /** Whether a win's payout floats over the machine for everyone nearby to see. */
+    public static boolean showPayouts = true;
+
+    /** Whether a jackpot also drops a legendary loot box at the machine. */
+    public static boolean jackpotLootBox = true;
+
     // --- general ----------------------------------------------------------------------------------
 
     /** Master switch for natural loot-box generation. Off still leaves the boxes placeable by hand. */
@@ -672,6 +678,13 @@ public final class LbeConfig {
             "Whether a jackpot announcement includes the machine's coordinates, so people can come "
                 + "and look. Off by default: on a server where a casino is somebody's private build, "
                 + "that is their address being read out to everyone.");
+        showPayouts = config.getBoolean("showPayouts", CATEGORY_CASINO, showPayouts,
+            "Whether a win's payout floats briefly over the machine, visible to anyone nearby. "
+                + "Wins are public in a real casino; turn this off if players would rather keep "
+                + "their winnings to themselves.");
+        jackpotLootBox = config.getBoolean("jackpotLootBox", CATEGORY_CASINO, jackpotLootBox,
+            "Whether a jackpot also drops a legendary loot box at the machine. The box is items, "
+                + "not money, so no game's return changes; it only makes the rarest moment rarer.");
 
         if (config.hasChanged()) {
             config.save();

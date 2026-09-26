@@ -47,3 +47,17 @@ lbe.casino.hint=Three of a kind pays up to %sx
 lbe.casino.rtp=Returns %s%% over time
 lbe.casino.closed=The casino is closed on this server.
 lbe.casino.bet_range=Bets here are between %s and %s.
+
+# Casino advancements
+advancements.lbe.casino.root.title=Lucky Bucks
+advancements.lbe.casino.root.description=Place a bet at any casino machine
+advancements.lbe.casino.first_win.title=Beginner's Luck
+advancements.lbe.casino.first_win.description=Walk away from a machine with more than you put in
+advancements.lbe.casino.big_win.title=Heads Turn
+advancements.lbe.casino.big_win.description=Win ten times your bet or more in a single round
+advancements.lbe.casino.jackpot.title=JACKPOT!
+advancements.lbe.casino.jackpot.description=Hit a jackpot
+advancements.lbe.casino.grand_tour.title=Grand Tour
+advancements.lbe.casino.grand_tour.description=Play every game in the casino
+advancements.lbe.casino.nerves_of_steel.title=Nerves of Steel
+advancements.lbe.casino.nerves_of_steel.description=Cash out of a mines round at 5x or better

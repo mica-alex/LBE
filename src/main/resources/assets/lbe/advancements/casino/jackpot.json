@@ -1,0 +1,23 @@
+{
+  "parent": "lbe:casino/big_win",
+  "display": {
+    "icon": {
+      "item": "minecraft:gold_block"
+    },
+    "title": {
+      "translate": "advancements.lbe.casino.jackpot.title"
+    },
+    "description": {
+      "translate": "advancements.lbe.casino.jackpot.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": true
+  },
+  "criteria": {
+    "earned": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

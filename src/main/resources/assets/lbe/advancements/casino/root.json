@@ -1,0 +1,23 @@
+{
+  "display": {
+    "icon": {
+      "item": "lbe:slot_machine"
+    },
+    "title": {
+      "translate": "advancements.lbe.casino.root.title"
+    },
+    "description": {
+      "translate": "advancements.lbe.casino.root.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false,
+    "background": "minecraft:textures/blocks/quartz_block_side.png"
+  },
+  "criteria": {
+    "played": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

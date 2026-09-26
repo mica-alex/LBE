@@ -19,7 +19,8 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 /**
  * What the rest of the casino floor notices about a round: the sound other players hear, the
- * particles over the machine, and the chat line when it is a jackpot.
+ * particles over the machine, the redstone signal a win gives off, the advancements it earns, the
+ * chat line and bonus loot box when it is a jackpot.
  *
  * <p><b>Why these are delayed.</b> The server settles a round the moment the bet arrives, but the
  * player's screen deliberately animates for {@link CasinoFanfare#REVEAL_TICKS} before it shows
@@ -55,18 +56,21 @@ public final class CasinoEffects {
      * @param player who played it, excluded from the world sound because their screen plays it
      * @param delayTicks how long until their screen shows the result; 0 when it already has
      * @param announcement the chat line for the whole server, or {@code null} for none
+     * @param advancements casino advancements the round earned, granted at the reveal
      */
     public static void roundSettled(WorldServer world, BlockPos pos, boolean tall,
                                     EntityPlayer player, CasinoFanfare fanfare, int delayTicks,
-                                    @Nullable ITextComponent announcement) {
-        if (!fanfare.isHeardByBystanders() && announcement == null) {
+                                    @Nullable ITextComponent announcement,
+                                    List<String> advancements) {
+        if (!fanfare.isHeardByBystanders() && announcement == null && advancements.isEmpty()) {
             return;
         }
         if (PENDING.size() >= MAX_PENDING) {
             return;
         }
         PENDING.add(new Pending(world, pos, tall, player.getUniqueID(), fanfare,
-            world.getTotalWorldTime() + Math.max(0, delayTicks), announcement));
+            world.getTotalWorldTime() + Math.max(0, delayTicks), announcement,
+            new ArrayList<>(advancements)));
     }
 
     /** Drops everything queued. Called when the server stops. */
@@ -100,10 +104,42 @@ public final class CasinoEffects {
         if (pending.fanfare.isHeardByBystanders() && world.isBlockLoaded(pending.pos)) {
             playForBystanders(world, pending.pos, player, pending.fanfare);
             spawnParticles(world, pending.pos, pending.tall, pending.fanfare);
+            net.minecraft.tileentity.TileEntity tile = world.getTileEntity(pending.pos);
+            if (tile instanceof TileEntityCasinoMachine) {
+                ((TileEntityCasinoMachine) tile).pulseSignal(pending.fanfare);
+            }
         }
         if (pending.announcement != null && world.getMinecraftServer() != null) {
             world.getMinecraftServer().getPlayerList().sendMessage(pending.announcement);
         }
+        if (player instanceof net.minecraft.entity.player.EntityPlayerMP) {
+            for (String advancement : pending.advancements) {
+                CasinoAdvancements.grant((net.minecraft.entity.player.EntityPlayerMP) player,
+                    advancement, "earned");
+            }
+        }
+        if (pending.fanfare == CasinoFanfare.JACKPOT
+                && com.micatechnologies.minecraft.lbe.LbeConfig.jackpotLootBox
+                && world.isBlockLoaded(pending.pos)) {
+            dropJackpotBox(world, pending.pos, pending.tall);
+        }
+    }
+
+    /**
+     * A legendary loot box, popped out of the top of the machine. Seeded like any other box, so it
+     * cannot be re-rolled; items rather than money, so no game's return changes.
+     */
+    private static void dropJackpotBox(WorldServer world, BlockPos pos, boolean tall) {
+        net.minecraft.item.ItemStack box = com.micatechnologies.minecraft.lbe.block.LbeBlocks
+            .box(com.micatechnologies.minecraft.lbe.rarity.Rarity.LEGENDARY)
+            .createStack(world.rand);
+        net.minecraft.entity.item.EntityItem item = new net.minecraft.entity.item.EntityItem(world,
+            pos.getX() + 0.5D, pos.getY() + (tall ? 2.1D : 1.0D), pos.getZ() + 0.5D, box);
+        item.motionX = 0.0D;
+        item.motionY = 0.25D;
+        item.motionZ = 0.0D;
+        item.setDefaultPickupDelay();
+        world.spawnEntity(item);
     }
 
     private static void playForBystanders(WorldServer world, BlockPos pos,
@@ -172,9 +208,10 @@ public final class CasinoEffects {
         final long dueTick;
         @Nullable
         final ITextComponent announcement;
+        final List<String> advancements;
 
         Pending(WorldServer world, BlockPos pos, boolean tall, UUID playerId, CasinoFanfare fanfare,
-                long dueTick, @Nullable ITextComponent announcement) {
+                long dueTick, @Nullable ITextComponent announcement, List<String> advancements) {
             this.world = world;
             this.pos = pos;
             this.tall = tall;
@@ -182,6 +219,7 @@ public final class CasinoEffects {
             this.fanfare = fanfare;
             this.dueTick = dueTick;
             this.announcement = announcement;
+            this.advancements = advancements;
         }
     }
 }

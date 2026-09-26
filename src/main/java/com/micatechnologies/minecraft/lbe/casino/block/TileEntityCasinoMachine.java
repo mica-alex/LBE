@@ -41,7 +41,8 @@ import net.minecraft.util.text.TextFormatting;
 import net.minecraft.world.WorldServer;
 
 /**
- * One casino machine of any kind. Holds no money and remembers nothing across a restart.
+ * One casino machine of any kind. Holds no money, and the only thing it keeps across a restart is
+ * its dyed trim, which is decoration rather than game state.
  *
  * <p><b>Every game is decided here, on the server.</b> The client asks to bet and is told what
  * happened; it is never asked what came up. A reel, a card or a wheel that stops where the client
@@ -93,8 +94,23 @@ public class TileEntityCasinoMachine extends TileEntity {
     /** How long the last round animates before its result shows, in ticks. */
     private int displayRevealTicks;
 
+    /** What the last round paid, formatted for display, or empty when there is nothing to show. */
+    private String displayPayout = "";
+
     /** Client only: local world time the last round arrived, or -1 when it arrived pre-settled. */
     private long displayArrivedAt = -1L;
+
+    /**
+     * The neon trim's dye colour ({@code EnumDyeColor} metadata), or -1 for none.
+     *
+     * <p>The one thing about a machine that <b>is</b> saved: it is decoration somebody chose, not
+     * game state, so there is nothing to reconcile against a wager after a restart.
+     */
+    private int trim = -1;
+
+    /** Server only: the redstone level a revealed win gives off, and when it stops. Not saved. */
+    private int signalLevel;
+    private long signalUntil;
 
     /**
      * A two-step game mid-deal, with the money already taken.
@@ -241,11 +257,31 @@ public class TileEntityCasinoMachine extends TileEntity {
             totalReturn, balanceOf(player), revealFor(game, result), result.describe()), player);
 
         CasinoFanfare fanfare = fanfareOf(result);
-        showRound(revealFor(game, result), fanfare, revealTicks);
+        String payoutText = LbeConfig.showPayouts && fanfare.isHeardByBystanders()
+            ? "WIN " + LbeEconomy.format(totalReturn) : "";
+        showRound(revealFor(game, result), fanfare, revealTicks, payoutText);
+
+        // Playing counts at once; nothing about it gives the result away.
+        CasinoAdvancements.grant(player, "root", "played");
+        CasinoAdvancements.grant(player, "grand_tour", game.registryName());
+        // Winning counts at the reveal, with everything else the floor notices.
+        java.util.List<String> earned = new java.util.ArrayList<>();
+        if (fanfare.isHeardByBystanders()) {
+            earned.add("first_win");
+        }
+        if (fanfare == CasinoFanfare.BIG_WIN || fanfare == CasinoFanfare.JACKPOT) {
+            earned.add("big_win");
+        }
+        if (fanfare == CasinoFanfare.JACKPOT) {
+            earned.add("jackpot");
+        }
+        if (game == CasinoGame.MINES && revealTicks > 0 && result.totalReturnMultiplier() >= 5.0) {
+            earned.add("nerves_of_steel");
+        }
         ITextComponent announcement = LbeConfig.announceJackpots && fanfare == CasinoFanfare.JACKPOT
             ? announcement(player, game, totalReturn) : null;
         CasinoEffects.roundSettled((WorldServer) world, pos, game.isTall(), player, fanfare,
-            revealTicks, announcement);
+            revealTicks, announcement, earned);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -661,8 +697,9 @@ public class TileEntityCasinoMachine extends TileEntity {
     // ---------------------------------------------------------------------------------------------
 
     /** Server: records a settled round for the room to see, and sends it to whoever is watching. */
-    private void showRound(int[] reveal, CasinoFanfare fanfare, int revealTicks) {
+    private void showRound(int[] reveal, CasinoFanfare fanfare, int revealTicks, String payout) {
         display = reveal.clone();
+        displayPayout = payout;
         displayFanfare = fanfare.ordinal();
         displayRevealTicks = revealTicks;
         if (world != null && !world.isRemote) {
@@ -672,10 +709,45 @@ public class TileEntityCasinoMachine extends TileEntity {
         }
     }
 
+    @Override
+    public NBTTagCompound writeToNBT(NBTTagCompound tag) {
+        super.writeToNBT(tag);
+        tag.setByte("lbeTrim", (byte) trim);
+        return tag;
+    }
+
+    @Override
+    public void readFromNBT(NBTTagCompound tag) {
+        super.readFromNBT(tag);
+        trim = tag.hasKey("lbeTrim") ? clampTrim(tag.getByte("lbeTrim")) : -1;
+    }
+
+    private static int clampTrim(int value) {
+        return value >= 0 && value < 16 ? value : -1;
+    }
+
+    /** Server: dyes the machine's neon trim and tells watching clients. */
+    public void setTrim(net.minecraft.item.EnumDyeColor colour) {
+        trim = colour.getMetadata();
+        markDirty();
+        if (world != null && !world.isRemote) {
+            net.minecraft.block.state.IBlockState state = world.getBlockState(pos);
+            world.notifyBlockUpdate(pos, state, state, 2);
+        }
+    }
+
+    /** The trim's colour as RGB, or -1 when the machine has not been dyed. */
+    public int trimColour() {
+        return trim < 0 ? -1
+            : net.minecraft.item.EnumDyeColor.byMetadata(trim).getColorValue();
+    }
+
     private NBTTagCompound writeDisplay(NBTTagCompound tag) {
         tag.setIntArray("lbeShow", display);
         tag.setByte("lbeFanfare", (byte) displayFanfare);
         tag.setShort("lbeRevealTicks", (short) displayRevealTicks);
+        tag.setString("lbePayout", displayPayout);
+        tag.setByte("lbeTrim", (byte) trim);
         return tag;
     }
 
@@ -686,6 +758,9 @@ public class TileEntityCasinoMachine extends TileEntity {
      *     sent with the chunk, which is shown as already settled
      */
     private void readDisplay(NBTTagCompound tag, boolean live) {
+        if (tag.hasKey("lbeTrim")) {
+            trim = clampTrim(tag.getByte("lbeTrim"));
+        }
         if (!tag.hasKey("lbeShow")) {
             return;
         }
@@ -696,6 +771,8 @@ public class TileEntityCasinoMachine extends TileEntity {
         display = incoming.length <= 64 ? incoming : new int[0];
         displayFanfare = tag.getByte("lbeFanfare");
         displayRevealTicks = Math.max(0, tag.getShort("lbeRevealTicks"));
+        String payout = tag.getString("lbePayout");
+        displayPayout = payout.length() <= 32 ? payout : "";
         displayArrivedAt = live && world != null ? world.getTotalWorldTime() : -1L;
     }
 
@@ -719,6 +796,62 @@ public class TileEntityCasinoMachine extends TileEntity {
     @Override
     public void onDataPacket(NetworkManager net, SPacketUpdateTileEntity packet) {
         readDisplay(packet.getNbtCompound(), true);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Redstone
+    // ---------------------------------------------------------------------------------------------
+
+    /** The redstone level for each fanfare: nothing for a loss or push, 15 for a jackpot. */
+    public static int signalFor(CasinoFanfare fanfare) {
+        switch (fanfare) {
+            case JACKPOT:
+                return 15;
+            case BIG_WIN:
+                return 11;
+            case WIN:
+                return 6;
+            default:
+                return 0;
+        }
+    }
+
+    /** How long a win's signal lasts, in ticks. Long enough to ring a bell; repeaters extend it. */
+    private static int signalTicksFor(CasinoFanfare fanfare) {
+        return fanfare == CasinoFanfare.JACKPOT ? 100 : fanfare == CasinoFanfare.BIG_WIN ? 40 : 20;
+    }
+
+    /** Server: gives off a win's signal, from the moment its reveal ends. */
+    void pulseSignal(CasinoFanfare fanfare) {
+        int level = signalFor(fanfare);
+        if (level <= 0 || world == null || world.isRemote) {
+            return;
+        }
+        int ticks = signalTicksFor(fanfare);
+        signalLevel = level;
+        signalUntil = world.getTotalWorldTime() + ticks;
+        notifySignalChanged();
+        world.scheduleUpdate(pos, getBlockType(), ticks + 1);
+    }
+
+    /** The redstone level right now: a win's signal while it lasts, otherwise 0. */
+    public int signal() {
+        return world != null && world.getTotalWorldTime() < signalUntil ? signalLevel : 0;
+    }
+
+    /** Tells wiring next to either half that the signal has changed. */
+    void notifySignalChanged() {
+        if (world == null || world.isRemote) {
+            return;
+        }
+        net.minecraft.block.Block block = getBlockType();
+        world.notifyNeighborsOfStateChange(pos, block, false);
+        world.updateComparatorOutputLevel(pos, block);
+        net.minecraft.util.math.BlockPos up = pos.up();
+        if (world.getBlockState(up).getBlock() == block) {
+            world.notifyNeighborsOfStateChange(up, block, false);
+            world.updateComparatorOutputLevel(up, block);
+        }
     }
 
     /** The last round's reveal, for the renderer. Empty before anyone has played. */
@@ -747,6 +880,11 @@ public class TileEntityCasinoMachine extends TileEntity {
     /** How long the last round animates before its result shows. */
     public int displayRevealTicks() {
         return displayRevealTicks;
+    }
+
+    /** What the last round paid, ready to draw, or empty when there is nothing to show. */
+    public String displayPayout() {
+        return displayPayout;
     }
 
     /**
