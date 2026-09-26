@@ -45,6 +45,9 @@
     },
     "mines_machine": {
       "trigger": "minecraft:impossible"
+    },
+    "blackjack_table": {
+      "trigger": "minecraft:impossible"
     }
   },
   "requirements": [
@@ -77,6 +80,9 @@
     ],
     [
       "mines_machine"
+    ],
+    [
+      "blackjack_table"
     ]
   ]
 }

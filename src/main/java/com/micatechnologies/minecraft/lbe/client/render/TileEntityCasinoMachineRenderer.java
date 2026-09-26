@@ -212,8 +212,44 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
             case MINES:
                 drawMines(round);
                 break;
+            case BLACKJACK:
+                drawBlackjack(round);
+                break;
             default:
                 break;
+        }
+    }
+
+    /**
+     * The dealer's cards across the far side of the felt and the player's hand (or two) nearer.
+     * Decoded from the same reveal the player's screen got; face down while the round animates.
+     */
+    private void drawBlackjack(Round round) {
+        text("DEALER", 0.0F, -29.0F, 0xF0C040, 0.5F);
+        int[] show = round.played() ? round.show : new int[0];
+        int i = 0;
+        int dealerCount = show.length > 0 ? Math.min(8, Math.max(0, show[0])) : 2;
+        i = show.length > 0 ? 1 : 0;
+        drawRow(round, show, i, dealerCount, -17.0F);
+        i += round.played() ? dealerCount : 0;
+        int handCount = round.played() && i < show.length ? Math.min(2, Math.max(1, show[i])) : 1;
+        i += 2;   // hand count, then the active hand's index
+        for (int h = 0; h < handCount; h++) {
+            int count = round.played() && i + 1 < show.length ? Math.min(8, Math.max(0, show[i + 1]))
+                : 2;
+            i += 2;
+            drawRow(round, show, i, count, handCount == 1 ? 9.0F : 3.0F + h * 15.0F);
+            i += round.played() ? count : 0;
+        }
+    }
+
+    /** A row of up to eight small cards, centred, starting at {@code show[from]}. */
+    private void drawRow(Round round, int[] show, int from, int count, float cy) {
+        float spacing = 9.0F;
+        float start = -(count - 1) * spacing / 2.0F;
+        for (int c = 0; c < count; c++) {
+            Card card = round.settled() && from + c < show.length ? cardOf(show[from + c]) : null;
+            card(start + c * spacing, cy, 8.0F, 11.0F, card);
         }
     }
 

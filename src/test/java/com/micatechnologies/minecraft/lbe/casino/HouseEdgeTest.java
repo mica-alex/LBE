@@ -12,6 +12,7 @@ import com.micatechnologies.minecraft.lbe.casino.highlow.HighLowGame;
 import com.micatechnologies.minecraft.lbe.casino.keno.KenoGame;
 import com.micatechnologies.minecraft.lbe.casino.plinko.PlinkoGame;
 import com.micatechnologies.minecraft.lbe.casino.roulette.RouletteGame;
+import com.micatechnologies.minecraft.lbe.casino.blackjack.BlackjackMath;
 import com.micatechnologies.minecraft.lbe.casino.slots.ProgressiveJackpot;
 import com.micatechnologies.minecraft.lbe.casino.slots.SlotPaytable;
 import com.micatechnologies.minecraft.lbe.casino.war.WarGame;
@@ -75,6 +76,16 @@ class HouseEdgeTest {
         assertEquals(50.0, pot.pool(), 1.0e-9);
         pot.contribute(10.0, -1.0);                         // a negative share adds nothing
         assertEquals(50.0, pot.pool(), 1.0e-9);
+    }
+
+    @Test
+    @DisplayName("blackjack keeps 0.57% even from a perfect player")
+    void blackjack() {
+        // Infinite deck, dealer stands on soft 17, 3:2, double any two, split once, double after
+        // split, no insurance or surrender. Anyone playing less than perfectly returns less.
+        // BlackjackTest checks the engine lands on this figure when played perfectly.
+        assertEquals(0.9942961198772642, BlackjackMath.returnToPlayer(), 1.0e-12);
+        assertTrue(BlackjackMath.returnToPlayer() < BREAK_EVEN);
     }
 
     @Test
@@ -251,6 +262,9 @@ class HouseEdgeTest {
         // The canary. A new game cannot join the casino without somebody deciding what it costs to
         // play, because this fails until its number is inside the band.
         assertInBand("slots", SlotPaytable.returnToPlayer());
+        assertInBand("slots with the largest progressive share",
+            ProgressiveJackpot.slotsReturnWith(ProgressiveJackpot.MAX_SHARE));
+        assertInBand("blackjack (perfect play)", BlackjackMath.returnToPlayer());
         assertInBand("coin flip", CoinFlipGame.returnToPlayer());
         assertInBand("war", WarGame.returnToPlayer());
         assertInBand("high-low (worst call)", HighLowGame.worstReturnToPlayer());

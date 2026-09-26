@@ -239,7 +239,7 @@ in the tile entity's NBT because it is decoration somebody chose, not game state
 
 ## The games
 
-Ten, all sharing one block class, one tile entity, one screen and one pair of packets. Adding
+Eleven, all sharing one block class, one tile entity, one screen and one pair of packets. Adding
 another is: pure logic in its own package, a constant in `CasinoGame`, a branch in
 `TileEntityCasinoMachine.resolve`, a branch in `GuiCasinoMachine.drawReveal`, and a motif in
 `tools/gen_casino_textures.py`. Nothing that moves money is touched.
@@ -256,6 +256,7 @@ another is: pure logic in its own package, a constant in `CasinoGame`, a branch 
 | Baccarat | 98.6 / 98.9 / 85.6% | `baccarat_game.py` | no — the 5% banker commission is its edge |
 | Video poker | 70% naive → ~99.5% optimal | `video_poker_game.py` (9/6 Jacks or Better) | no |
 | Mines | 96% at every stopping point | `mines_game.py` | no |
+| Blackjack | 99.43% perfect play, less otherwise | `blackjack_game.py` | rules pinned: S17, 3:2, DAS, split once, infinite deck, no insurance/surrender |
 
 ### Why four games needed repricing
 
@@ -320,15 +321,25 @@ take away, and LBE already has loot boxes for that.
 **Video poker's double-or-nothing.** Deferred rather than excluded. It stakes a payout that has
 already settled, which `Wager` cannot express — that is a wager-model change, not a game.
 
+## Several stakes in one round: `WagerSet`
+
+Blackjack's splits and doubles put more money on the table mid-round. Each extra stake is an
+ordinary `Wager`, taken through `CasinoBank` exactly like a bet, so SUM sees nothing new and
+`SumEconomyBridge` is unchanged. `WagerSet` (pure) tracks which hand each stake rides on and
+settles every one exactly once by its own hand's result; an abandoned round refunds them all. If a
+player cannot cover a double or split, the action is refused and the hand carries on as it was.
+
+Blackjack's return is computed in closed form (`BlackjackMath`: the optimal-strategy value of
+every hand against the dealer's peek-conditioned outcomes, infinite deck) and pinned by
+`HouseEdgeTest`; `BlackjackTest` plays the real engine a million rounds with that same strategy and
+checks it lands on the figure. Mid-round the client is sent only the dealer's upcard.
+
 ## Still to come
 
 | Game | Bot source | What it needs first |
 |---|---|---|
-| Blackjack | `blackjack_game.py` | Hit/stand/double/split. Splits turn one wager into several, which `Wager` does not model yet |
-| Craps | `craps_game.py` | Many simultaneous bets across several rolls — needs a wager *set* |
+| Craps | `craps_game.py` | Many simultaneous bets across several rolls. `WagerSet` now covers the money side |
 | Xtreme Hold'em | `xtreme_holdem_game.py` | Player-vs-player. Needs a pot, and a table whose state survives a restart |
-
-| Craps | `craps_game.py` | Many simultaneous bets across several rolls — needs a wager *set* |
 
 Two things to settle before the multiplayer tables:
 

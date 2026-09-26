@@ -6,6 +6,9 @@ import com.micatechnologies.minecraft.lbe.casino.CasinoFanfare;
 import com.micatechnologies.minecraft.lbe.casino.CasinoGame;
 import com.micatechnologies.minecraft.lbe.casino.block.TileEntityCasinoMachine;
 import com.micatechnologies.minecraft.lbe.casino.baccarat.BaccaratGame;
+import com.micatechnologies.minecraft.lbe.casino.blackjack.BlackjackGame;
+import com.micatechnologies.minecraft.lbe.casino.blackjack.BlackjackHand;
+import com.micatechnologies.minecraft.lbe.casino.blackjack.BlackjackMath;
 import com.micatechnologies.minecraft.lbe.casino.cards.Card;
 import com.micatechnologies.minecraft.lbe.casino.coinflip.CoinFlipGame;
 import com.micatechnologies.minecraft.lbe.casino.highlow.HighLowGame;
@@ -278,6 +281,9 @@ public class GuiCasinoMachine extends GuiScreen {
                 return 60;
             case VIDEO_POKER:
                 return 40;
+            case BLACKJACK:
+                // The dealer's row, then up to two hands of the player's.
+                return 64;
             case MINES:
                 // Four rows of six, plus a little under them.
                 return (MinesGame.GRID_SIZE / 6) * 18 + 4;
@@ -364,6 +370,21 @@ public class GuiCasinoMachine extends GuiScreen {
             case KENO:
                 options.add(new Option("Quick pick", 0, 0));
                 options.add(new Option("Clear", 1, 0));
+                break;
+            case BLACKJACK:
+                // Only what is legal right now, worked out from what the server sent. The server
+                // checks again; this just keeps illegal buttons off the screen.
+                if (awaitingChoice && settled != null) {
+                    BlackjackView view = BlackjackView.parse(settled.reveal());
+                    options.add(new Option("Hit", BlackjackGame.Action.HIT.ordinal(), 0));
+                    options.add(new Option("Stand", BlackjackGame.Action.STAND.ordinal(), 0));
+                    if (view != null && view.canDouble()) {
+                        options.add(new Option("Double", BlackjackGame.Action.DOUBLE.ordinal(), 0));
+                    }
+                    if (view != null && view.canSplit()) {
+                        options.add(new Option("Split", BlackjackGame.Action.SPLIT.ordinal(), 0));
+                    }
+                }
                 break;
             default:
                 break;   // slots and war have nothing to choose
@@ -668,7 +689,7 @@ public class GuiCasinoMachine extends GuiScreen {
             }
             int index = button.id - ID_OPTION_BASE;
             boolean chosen = index == selectedOption && game != CasinoGame.KENO
-                && game != CasinoGame.VIDEO_POKER;
+                && game != CasinoGame.VIDEO_POKER && game != CasinoGame.BLACKJACK;
             button.packedFGColour = chosen ? 0xFFD54F : 0;
             if (index < options.size()) {
                 button.displayString = (chosen ? "> " : "") + options.get(index).label;
@@ -691,6 +712,9 @@ public class GuiCasinoMachine extends GuiScreen {
             case WAR:
             case HIGH_LOW:
                 drawCards(centre, top);
+                break;
+            case BLACKJACK:
+                drawBlackjack(centre, top);
                 break;
             case ROULETTE:
                 drawRoulette(centre, top);
@@ -737,6 +761,116 @@ public class GuiCasinoMachine extends GuiScreen {
             }
             drawModalRectWithCustomSizedTexture(windowLeft + 4 + reel * (TILE + 4), top,
                 0, symbol.index() * TILE, TILE, TILE, TILE, TILE * SlotSymbol.values().length);
+        }
+    }
+
+    /** The dealer's row, then each of the player's hands, with the one being played marked. */
+    private void drawBlackjack(int centre, int top) {
+        BlackjackView view = settled == null ? null : BlackjackView.parse(settled.reveal());
+        if (view == null) {
+            drawCenteredString(fontRenderer, "Place a bet to deal.", centre, top + 24, 0x9090A0);
+            return;
+        }
+        boolean over = settled.stage() == PacketCasinoResult.Stage.SETTLED && !animating;
+        String dealer = cardsText(view.dealer);
+        if (!over && view.dealer.length == 1) {
+            dealer += " " + TextFormatting.DARK_GRAY + "[?]";
+        }
+        drawCenteredString(fontRenderer, "Dealer: " + dealer
+            + (over ? TextFormatting.GRAY + "  (" + BlackjackView.total(view.dealer) + ")" : ""),
+            centre, top + 6, 0xFFFFFF);
+        for (int h = 0; h < view.hands.length; h++) {
+            boolean active = !over && view.hands.length > 1 && h == view.active;
+            String label = view.hands.length > 1 ? "Hand " + (h + 1) : "You";
+            String doubled = view.stakes[h] > 1 ? TextFormatting.GOLD + " x2" : "";
+            drawCenteredString(fontRenderer, (active ? "> " : "") + label + ": "
+                    + cardsText(view.hands[h]) + TextFormatting.GRAY + "  ("
+                    + BlackjackView.total(view.hands[h]) + ")" + doubled,
+                centre, top + 26 + h * 14, active ? 0xFFD54F : 0xFFFFFF);
+        }
+    }
+
+    private static String cardsText(int[] ids) {
+        StringBuilder text = new StringBuilder();
+        for (int id : ids) {
+            Card card = TileEntityCasinoMachine.cardFromId(id);
+            text.append(card.suit().isRed() ? TextFormatting.RED : TextFormatting.WHITE)
+                .append(card).append(' ');
+        }
+        return text.toString().trim() + TextFormatting.RESET;
+    }
+
+    /**
+     * A blackjack table decoded from the server's reveal (see
+     * {@code TileEntityCasinoMachine.blackjackReveal}). Bounds-checked throughout: a malformed array
+     * reads as "nothing to draw" rather than an exception on the render thread.
+     */
+    static final class BlackjackView {
+        int[] dealer;
+        int[][] hands;
+        int[] stakes;
+        int active;
+
+        @Nullable
+        static BlackjackView parse(int[] r) {
+            try {
+                BlackjackView view = new BlackjackView();
+                int i = 0;
+                int dealerCount = r[i++];
+                if (dealerCount < 0 || dealerCount > 12) {
+                    return null;
+                }
+                view.dealer = java.util.Arrays.copyOfRange(r, i, i + dealerCount);
+                i += dealerCount;
+                int handCount = r[i++];
+                if (handCount < 1 || handCount > 2) {
+                    return null;
+                }
+                view.active = r[i++];
+                view.hands = new int[handCount][];
+                view.stakes = new int[handCount];
+                for (int h = 0; h < handCount; h++) {
+                    view.stakes[h] = r[i++];
+                    int count = r[i++];
+                    if (count < 0 || count > 12) {
+                        return null;
+                    }
+                    view.hands[h] = java.util.Arrays.copyOfRange(r, i, i + count);
+                    i += count;
+                }
+                return view;
+            } catch (ArrayIndexOutOfBoundsException e) {
+                return null;
+            }
+        }
+
+        private int[] activeHand() {
+            return hands[Math.max(0, Math.min(active, hands.length - 1))];
+        }
+
+        private static int hard(int id) {
+            return BlackjackHand.hardValue(TileEntityCasinoMachine.cardFromId(id).rank());
+        }
+
+        boolean canDouble() {
+            int[] hand = activeHand();
+            boolean splitAces = hands.length == 2 && hand.length > 0 && hard(hand[0]) == 1;
+            return hand.length == 2 && !splitAces;
+        }
+
+        boolean canSplit() {
+            return hands.length == 1 && hands[0].length == 2 && hard(hands[0][0]) == hard(hands[0][1]);
+        }
+
+        static int total(int[] ids) {
+            int hard = 0;
+            boolean ace = false;
+            for (int id : ids) {
+                int v = hard(id);
+                hard += v;
+                ace |= v == 1;
+            }
+            return ace && hard + 10 <= 21 ? hard + 10 : hard;
         }
     }
 
@@ -969,6 +1103,10 @@ public class GuiCasinoMachine extends GuiScreen {
                 // The only game here whose return depends on how well it is played, so stating one
                 // number would be a lie in either direction.
                 return "Returns up to 99.5% — with perfect play";
+            case BLACKJACK:
+                // Like video poker: the figure is for perfect play, and says so.
+                return String.format(Locale.ROOT, "Returns up to %.1f%% — with perfect play",
+                    BlackjackMath.returnToPlayer() * 100.0);
             case MINES:
                 // Exactly the same at every stopping point, which is the nice thing about it.
                 rtp = 1.0 - MinesGame.HOUSE_EDGE;

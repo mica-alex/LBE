@@ -6,10 +6,13 @@ import com.micatechnologies.minecraft.lbe.casino.CasinoFanfare;
 import com.micatechnologies.minecraft.lbe.casino.CasinoGame;
 import com.micatechnologies.minecraft.lbe.casino.GameResult;
 import com.micatechnologies.minecraft.lbe.casino.baccarat.BaccaratGame;
+import com.micatechnologies.minecraft.lbe.casino.blackjack.BlackjackGame;
+import com.micatechnologies.minecraft.lbe.casino.blackjack.BlackjackHand;
 import com.micatechnologies.minecraft.lbe.casino.cards.Card;
 import com.micatechnologies.minecraft.lbe.casino.coinflip.CoinFlipGame;
 import com.micatechnologies.minecraft.lbe.casino.economy.LbeEconomy;
 import com.micatechnologies.minecraft.lbe.casino.economy.Wager;
+import com.micatechnologies.minecraft.lbe.casino.economy.WagerSet;
 import com.micatechnologies.minecraft.lbe.casino.highlow.HighLowGame;
 import com.micatechnologies.minecraft.lbe.casino.keno.KenoGame;
 import com.micatechnologies.minecraft.lbe.casino.mines.MinesGame;
@@ -125,18 +128,39 @@ public class TileEntityCasinoMachine extends TileEntity {
         @Nullable final HighLowGame highLow;
         @Nullable final VideoPokerGame videoPoker;
         @Nullable final MinesGame mines;
+        @Nullable final BlackjackGame blackjack;
         final Wager wager;
+        /** Blackjack only: every stake in the round, the base bet included. */
+        @Nullable final WagerSet stakes;
         final double bet;
 
         OpenHand(CasinoGame kind, @Nullable HighLowGame highLow,
                  @Nullable VideoPokerGame videoPoker, @Nullable MinesGame mines,
                  Wager wager, double bet) {
+            this(kind, highLow, videoPoker, mines, null, wager, null, bet);
+        }
+
+        OpenHand(CasinoGame kind, @Nullable HighLowGame highLow,
+                 @Nullable VideoPokerGame videoPoker, @Nullable MinesGame mines,
+                 @Nullable BlackjackGame blackjack, Wager wager, @Nullable WagerSet stakes,
+                 double bet) {
             this.kind = kind;
             this.highLow = highLow;
             this.videoPoker = videoPoker;
             this.mines = mines;
+            this.blackjack = blackjack;
             this.wager = wager;
+            this.stakes = stakes;
             this.bet = bet;
+        }
+
+        /** Refunds everything this hand has staked: one wager, or a blackjack round's whole set. */
+        void refund() {
+            if (stakes != null) {
+                stakes.cancelAll();
+            } else {
+                wager.cancel();
+            }
         }
     }
 
@@ -268,13 +292,33 @@ public class TileEntityCasinoMachine extends TileEntity {
                 stats.collectProgressive();
             }
         }
-        LbeNetwork.CHANNEL.sendTo(new PacketCasinoResult(game, result.totalReturnMultiplier(),
-            totalReturn, balanceOf(player), revealFor(game, result), result.describe()), player);
+        boolean nerves = game == CasinoGame.MINES && revealTicks > 0
+            && result.totalReturnMultiplier() >= 5.0;
+        afterSettle(player, game, result.totalReturnMultiplier(), bet, totalReturn,
+            revealFor(game, result), result.describe(), fanfareOf(result), nerves, revealTicks,
+            bonus);
+    }
 
-        CasinoFanfare fanfare = fanfareOf(result);
+    /**
+     * Everything that follows a settled round, whatever the game and however many stakes it had:
+     * the result to the player, the display for the room, advancements, the ledger, and the effects
+     * held for the reveal.
+     *
+     * @param multiplier what the round returned per unit staked, for the player's screen
+     * @param staked everything the player staked in the round
+     * @param bonus the progressive's share of {@code totalReturn}, or 0
+     */
+    private void afterSettle(EntityPlayerMP player, CasinoGame game, double multiplier,
+                             double staked, double totalReturn, int[] reveal, String describe,
+                             CasinoFanfare fanfare, boolean nerves, int revealTicks,
+                             double bonus) {
+        CasinoStatsData stats = CasinoStatsData.get(world);
+        LbeNetwork.CHANNEL.sendTo(new PacketCasinoResult(game, multiplier, totalReturn,
+            balanceOf(player), reveal, describe), player);
+
         String payoutText = LbeConfig.showPayouts && fanfare.isHeardByBystanders()
             ? "WIN " + LbeEconomy.format(totalReturn) : "";
-        showRound(revealFor(game, result), fanfare, revealTicks, payoutText);
+        showRound(reveal, fanfare, revealTicks, payoutText);
 
         // Playing counts at once; nothing about it gives the result away.
         CasinoAdvancements.grant(player, "root", "played");
@@ -290,14 +334,15 @@ public class TileEntityCasinoMachine extends TileEntity {
         if (fanfare == CasinoFanfare.JACKPOT) {
             earned.add("jackpot");
         }
-        if (game == CasinoGame.MINES && revealTicks > 0 && result.totalReturnMultiplier() >= 5.0) {
+        if (nerves) {
             earned.add("nerves_of_steel");
         }
         ITextComponent announcement = LbeConfig.announceJackpots && fanfare == CasinoFanfare.JACKPOT
             ? announcement(player, game, totalReturn, bonus) : null;
         // The ledger records money that has already moved, so totals are written now. A big win
         // only reaches the public board at the reveal, like everything else the floor notices.
-        stats.record(player.getUniqueID(), player.getName(), game.registryName(), bet, totalReturn);
+        stats.record(player.getUniqueID(), player.getName(), game.registryName(), staked,
+            totalReturn);
         Runnable atReveal = null;
         if (fanfare == CasinoFanfare.BIG_WIN || fanfare == CasinoFanfare.JACKPOT) {
             CasinoLedger.BigWin win = new CasinoLedger.BigWin(player.getName(),
@@ -457,12 +502,153 @@ public class TileEntityCasinoMachine extends TileEntity {
     }
 
     // ---------------------------------------------------------------------------------------------
+    // Blackjack
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * One decision on a blackjack hand: hit, stand, double or split.
+     *
+     * <p>A double or a split stakes one more bet of the original size, through the bank like any
+     * other, <b>before</b> the cards move. If the player cannot cover it, the action is refused and
+     * the hand carries on exactly as it was.
+     */
+    private void continueBlackjack(EntityPlayerMP player, OpenHand open, int optionA) {
+        BlackjackGame table = open.blackjack;
+        BlackjackGame.Action action = BlackjackGame.Action.byCode(optionA);
+        if (table == null || open.stakes == null) {
+            return;
+        }
+        if (!table.canDo(action)) {
+            openHands.put(player.getUniqueID(), open);
+            sendBlackjackState(player, table, action == BlackjackGame.Action.SPLIT
+                ? "Only a pair can be split, and only once."
+                : "You can only double on your first two cards.");
+            return;
+        }
+        if (action == BlackjackGame.Action.DOUBLE || action == BlackjackGame.Action.SPLIT) {
+            Wager extra = LbeEconomy.bank().stake(player, open.bet,
+                "Blackjack " + (action == BlackjackGame.Action.DOUBLE ? "double" : "split"));
+            if (extra == null) {
+                openHands.put(player.getUniqueID(), open);
+                sendBlackjackState(player, table, LbeEconomy.bank().lastFailure());
+                return;
+            }
+            // A double rides on the hand being played; a split's new stake on the second hand.
+            open.stakes.add(action == BlackjackGame.Action.SPLIT ? 1 : table.activeHand(), extra);
+        }
+        try {
+            table.apply(action, random);
+        } catch (RuntimeException e) {
+            Lbe.LOGGER.error("[casino] A blackjack hand failed; refunding it.", e);
+            open.stakes.cancelAll();
+            reject(player, "The table jammed. Your bets have been returned.");
+            return;
+        }
+        if (table.isFinished()) {
+            settleBlackjack(player, open);
+        } else {
+            openHands.put(player.getUniqueID(), open);
+            sendBlackjackState(player, table, describeTurn(table));
+        }
+    }
+
+    /** Settles every stake in a finished blackjack round, each by its own hand. */
+    private void settleBlackjack(EntityPlayerMP player, OpenHand open) {
+        BlackjackGame table = open.blackjack;
+        WagerSet stakes = open.stakes;
+        double[] returns = new double[table.hands().size()];
+        for (int i = 0; i < returns.length; i++) {
+            returns[i] = table.returnFor(i);
+        }
+        double staked = stakes.staked();
+        WagerSet.Outcome outcome = stakes.settle(returns, TileEntityCasinoMachine::round);
+        if (outcome.failures() > 0) {
+            // Each failed stake is still held by the bank, which has logged why.
+            reject(player, "Part of your bet could not be settled. It is safe — tell an operator.");
+        }
+        double totalReturn = outcome.paid();
+        double multiplier = staked > 0.0 ? totalReturn / staked : 0.0;
+        afterSettle(player, CasinoGame.BLACKJACK, multiplier, staked, totalReturn,
+            blackjackReveal(table, true), describeResult(table), CasinoFanfare.of(multiplier, false),
+            false, CasinoFanfare.REVEAL_TICKS, 0.0);
+    }
+
+    private void sendBlackjackState(EntityPlayerMP player, BlackjackGame table, String message) {
+        LbeNetwork.CHANNEL.sendTo(PacketCasinoResult.dealt(CasinoGame.BLACKJACK,
+            balanceOf(player), blackjackReveal(table, false), message), player);
+    }
+
+    /**
+     * A blackjack table as the screen draws it: {@code [dealerCount, dealer..., handCount, active,
+     * then per hand: stakes, cardCount, cards...]}. Mid-round only the dealer's upcard is sent —
+     * a client that knows the hole card is a client that can play perfectly.
+     */
+    public static int[] blackjackReveal(BlackjackGame table, boolean showDealer) {
+        java.util.List<Integer> out = new java.util.ArrayList<>();
+        int dealerCards = showDealer ? table.dealer().size() : 1;
+        out.add(dealerCards);
+        for (int i = 0; i < dealerCards; i++) {
+            out.add(cardId(table.dealer().get(i)));
+        }
+        out.add(table.hands().size());
+        out.add(table.activeHand());
+        for (BlackjackHand hand : table.hands()) {
+            out.add(hand.stakes());
+            out.add(hand.cards().size());
+            for (Card card : hand.cards()) {
+                out.add(cardId(card));
+            }
+        }
+        int[] reveal = new int[out.size()];
+        for (int i = 0; i < reveal.length; i++) {
+            reveal[i] = out.get(i);
+        }
+        return reveal;
+    }
+
+    private static String describeTurn(BlackjackGame table) {
+        BlackjackHand hand = table.hands().get(table.activeHand());
+        String which = table.hands().size() > 1 ? "Hand " + (table.activeHand() + 1) + ": " : "";
+        return which + (hand.isSoft() ? "soft " : "") + hand.total() + " against "
+            + table.dealer().get(0) + ". Hit, stand, double or split?";
+    }
+
+    private static String describeResult(BlackjackGame table) {
+        StringBuilder text = new StringBuilder("Dealer ")
+            .append(table.dealerTotal()).append(". ");
+        for (int i = 0; i < table.hands().size(); i++) {
+            BlackjackHand hand = table.hands().get(i);
+            double r = table.returnFor(i);
+            String verdict = hand.isBlackjack() && r > 1.0 ? "blackjack!"
+                : hand.isBust() ? "bust" : r > 1.0 ? "wins" : r == 1.0 ? "pushes" : "loses";
+            if (table.hands().size() > 1) {
+                text.append("Hand ").append(i + 1).append(": ");
+            }
+            text.append(hand.total()).append(' ').append(verdict).append(". ");
+        }
+        return text.toString().trim();
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // High-low's two steps
     // ---------------------------------------------------------------------------------------------
 
     /** Step one: the stake is taken and the round begins. Nothing is decided yet. */
     private void deal(EntityPlayerMP player, CasinoGame game, int optionA, Wager wager,
                       double bet) {
+        if (game == CasinoGame.BLACKJACK) {
+            BlackjackGame table = BlackjackGame.deal(random);
+            WagerSet stakes = new WagerSet();
+            stakes.add(0, wager);
+            OpenHand open = new OpenHand(game, null, null, null, table, wager, stakes, bet);
+            if (table.isFinished()) {
+                settleBlackjack(player, open);   // a blackjack on the deal, either side
+            } else {
+                openHands.put(player.getUniqueID(), open);
+                sendBlackjackState(player, table, "Hit, stand, double or split?");
+            }
+            return;
+        }
         if (game == CasinoGame.MINES) {
             MinesGame board = new MinesGame(optionA, random);
             openHands.put(player.getUniqueID(),
@@ -502,6 +688,10 @@ public class TileEntityCasinoMachine extends TileEntity {
         }
         if (open.kind == CasinoGame.MINES) {
             continueMines(player, open, optionA, optionB);
+            return;
+        }
+        if (open.kind == CasinoGame.BLACKJACK) {
+            continueBlackjack(player, open, optionA);
             return;
         }
         GameResult result;
@@ -609,7 +799,7 @@ public class TileEntityCasinoMachine extends TileEntity {
     public void refundOpenHand(UUID playerId) {
         OpenHand open = openHands.remove(playerId);
         if (open != null) {
-            open.wager.cancel();
+            open.refund();
             Lbe.LOGGER.info("[casino] Refunded an abandoned high-low hand for {}.", playerId);
         }
     }
@@ -617,7 +807,7 @@ public class TileEntityCasinoMachine extends TileEntity {
     /** Refunds every hand left open here. For chunk unload and server stop. */
     public void refundAllOpenHands() {
         for (Map.Entry<UUID, OpenHand> entry : openHands.entrySet()) {
-            entry.getValue().wager.cancel();
+            entry.getValue().refund();
             Lbe.LOGGER.info("[casino] Refunded an open high-low hand for {} as the machine "
                 + "unloaded.", entry.getKey());
         }

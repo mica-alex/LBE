@@ -24,7 +24,8 @@ public enum CasinoGame {
     KENO("keno_machine", "Keno", Cabinet.TALL),
     BACCARAT("baccarat_table", "Baccarat", Cabinet.TABLE),
     VIDEO_POKER("video_poker_machine", "Video Poker", Cabinet.TALL),
-    MINES("mines_machine", "Mines", Cabinet.TALL);
+    MINES("mines_machine", "Mines", Cabinet.TALL),
+    BLACKJACK("blackjack_table", "Blackjack", Cabinet.TABLE);
 
     /** What shape of block the game sits in. */
     public enum Cabinet {
@@ -72,7 +73,7 @@ public enum CasinoGame {
      * note on why that state is deliberately not written to disk.
      */
     public boolean takesStakeUpFront() {
-        return this == HIGH_LOW || this == VIDEO_POKER || this == MINES;
+        return this == HIGH_LOW || this == VIDEO_POKER || this == MINES || this == BLACKJACK;
     }
 
     /** Whether a round can run for an unbounded number of choices. Mines, so far. */

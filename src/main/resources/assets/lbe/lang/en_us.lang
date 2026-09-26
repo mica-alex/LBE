@@ -35,6 +35,7 @@ tile.lbe.keno_machine.name=Keno Machine
 tile.lbe.baccarat_table.name=Baccarat Table
 tile.lbe.video_poker_machine.name=Video Poker Machine
 tile.lbe.mines_machine.name=Mines Machine
+tile.lbe.blackjack_table.name=Blackjack Table
 lbe.casino.title=Lucky Bucks
 lbe.casino.spin=Spin
 lbe.casino.spinning=Spinning...

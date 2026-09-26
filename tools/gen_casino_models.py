@@ -43,6 +43,7 @@ MACHINES = {
     "baccarat_table": False,
     "video_poker_machine": True,
     "mines_machine": True,
+    "blackjack_table": False,
 }
 
 # How far the upper body's screen face sits behind the front edge of the block, in 16ths. The

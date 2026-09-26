@@ -92,6 +92,7 @@ final class CasinoSounds {
             case BACCARAT:
             case HIGH_LOW:
             case VIDEO_POKER:
+            case BLACKJACK:
                 if (tick == 0 || tick == 8 || tick == 16) {
                     play(SoundEvents.ENTITY_ITEMFRAME_ROTATE_ITEM, 0.6F, 1.2F);
                 }
