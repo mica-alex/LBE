@@ -191,8 +191,54 @@ public class TileEntityCasinoMachine extends TileEntity {
 
     /** Sends the player their balance, with no result attached. */
     public void sendState(EntityPlayerMP player, CasinoGame game) {
+        OpenHand open = openHands.get(player.getUniqueID());
+        if (open != null) {
+            // A hand left open, by closing the screen or walking off, picks up where it was. The
+            // screen opens fresh, so without this its next click would be read as a move in a
+            // hand the player cannot see: in blackjack, a hit.
+            resendOpenHand(player, open);
+            return;
+        }
         LbeNetwork.CHANNEL.sendTo(
             PacketCasinoResult.balanceOnly(game, balanceOf(player)), player);
+    }
+
+    /** Sends an open hand to the player's screen again, as it was when they left it. */
+    private void resendOpenHand(EntityPlayerMP player, OpenHand open) {
+        int[] reveal;
+        String message;
+        switch (open.kind) {
+            case HIGH_LOW:
+                reveal = new int[] {cardId(open.highLow.base())};
+                message = "Your hand is still open: higher or lower than " + open.highLow.base()
+                    + "?";
+                break;
+            case VIDEO_POKER:
+                reveal = new int[VideoPokerGame.HAND_SIZE];
+                for (int i = 0; i < reveal.length; i++) {
+                    reveal[i] = cardId(open.videoPoker.hand().get(i));
+                }
+                message = "Your hand is still open. Hold what you want, then draw.";
+                break;
+            case MINES:
+                reveal = toIntArray(open.mines.revealed());
+                message = String.format(java.util.Locale.ROOT,
+                    "Still in play: %.2fx, next tile pays %.2fx", open.mines.currentMultiplier(),
+                    open.mines.nextMultiplier());
+                break;
+            case BLACKJACK:
+                reveal = blackjackReveal(open.blackjack, false);
+                message = describeTurn(open.blackjack);
+                break;
+            case CRAPS:
+                reveal = revealFor(CasinoGame.CRAPS, open.craps);
+                message = open.craps.describe();
+                break;
+            default:
+                return;
+        }
+        LbeNetwork.CHANNEL.sendTo(PacketCasinoResult.dealt(open.kind, balanceOf(player), reveal,
+            message), player);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -884,7 +930,8 @@ public class TileEntityCasinoMachine extends TileEntity {
         OpenHand open = openHands.remove(playerId);
         if (open != null) {
             open.refund();
-            Lbe.LOGGER.info("[casino] Refunded an abandoned high-low hand for {}.", playerId);
+            Lbe.LOGGER.info("[casino] Refunded an open {} hand for {}, who left.",
+                open.kind.displayName(), playerId);
         }
     }
 
@@ -892,8 +939,8 @@ public class TileEntityCasinoMachine extends TileEntity {
     public void refundAllOpenHands() {
         for (Map.Entry<UUID, OpenHand> entry : openHands.entrySet()) {
             entry.getValue().refund();
-            Lbe.LOGGER.info("[casino] Refunded an open high-low hand for {} as the machine "
-                + "unloaded.", entry.getKey());
+            Lbe.LOGGER.info("[casino] Refunded an open {} hand for {} as the machine unloaded.",
+                entry.getValue().kind.displayName(), entry.getKey());
         }
         openHands.clear();
     }

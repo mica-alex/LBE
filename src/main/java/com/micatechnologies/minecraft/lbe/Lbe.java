@@ -123,6 +123,30 @@ public class Lbe {
         event.getRegistry().registerAll(LbeRegistry.getItems().toArray(new Item[0]));
     }
 
+    /**
+     * A player who logs off with a hand open gets every stake back at once. Without this the
+     * stake waited, held, until the machine's chunk unloaded.
+     */
+    @SubscribeEvent
+    public void playerLoggedOut(
+            net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedOutEvent event) {
+        net.minecraft.server.MinecraftServer server = event.player.getServer();
+        if (server == null) {
+            return;
+        }
+        java.util.UUID id = event.player.getUniqueID();
+        for (net.minecraft.world.WorldServer world : server.worlds) {
+            for (net.minecraft.tileentity.TileEntity tile
+                    : new java.util.ArrayList<>(world.loadedTileEntityList)) {
+                if (tile instanceof com.micatechnologies.minecraft.lbe.casino.block
+                        .TileEntityCasinoMachine) {
+                    ((com.micatechnologies.minecraft.lbe.casino.block.TileEntityCasinoMachine) tile)
+                        .refundOpenHand(id);
+                }
+            }
+        }
+    }
+
     @EventHandler
     public void init(FMLInitializationEvent event) {
         proxy.init(event);

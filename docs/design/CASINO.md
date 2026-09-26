@@ -384,8 +384,10 @@ Two things to settle before the multiplayer tables:
   a hack.
 - **A table mid-hand has state that must survive a restart.** Every machine here is deliberately
   stateless except the games that take the stake up front — high-low's dealt card, video poker's
-  hand, mines' board — whose state is held in memory and refunded if the player leaves or the chunk
-  unloads. That is fine for a round somebody is sitting at. A hold'em table cannot do it. Where that state lives (tile entity NBT)
+  hand, mines' board, a blackjack or craps round — whose state is held in memory. Closing the
+  screen leaves the hand open, and reopening the machine resumes it where it was (before this, the
+  fresh screen's next click was read as a move in a hand the player could not see). Logging off, or
+  the chunk unloading, refunds every stake in it. That is fine for a round somebody is sitting at. A hold'em table cannot do it. Where that state lives (tile entity NBT)
   should be decided once, for all table games.
 
 The bot's `activity/` has 3D tables for several of these. Worth reading for layout
