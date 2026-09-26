@@ -3,6 +3,7 @@ package com.micatechnologies.minecraft.lbe.casino.block;
 import com.micatechnologies.minecraft.lbe.LbeConfig;
 import com.micatechnologies.minecraft.lbe.casino.slots.ProgressiveJackpot;
 import com.micatechnologies.minecraft.lbe.casino.stats.CasinoLedger;
+import com.micatechnologies.minecraft.lbe.casino.stats.ResponsiblePlay;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.nbt.NBTTagCompound;
@@ -31,6 +32,7 @@ public class CasinoStatsData extends WorldSavedData {
     private final CasinoLedger ledger = new CasinoLedger();
     private final ProgressiveJackpot progressive =
         new ProgressiveJackpot(LbeConfig.progressiveSeed);
+    private final ResponsiblePlay responsible = new ResponsiblePlay();
 
     /** Called reflectively by {@link MapStorage} when loading; the name must be accepted as is. */
     public CasinoStatsData(String name) {
@@ -56,6 +58,20 @@ public class CasinoStatsData extends WorldSavedData {
         return progressive;
     }
 
+    public ResponsiblePlay responsible() {
+        return responsible;
+    }
+
+    /** Why a player may not stake {@code amount} right now, or null if they may. */
+    public String refusal(UUID id, double amount) {
+        return responsible.refusal(id, amount, LbeConfig.dailyLossCap, System.currentTimeMillis());
+    }
+
+    /** Anything that changes the responsible-play records marks the save. */
+    public void changed() {
+        markDirty();
+    }
+
     /** Feeds a slot stake's share into the pool and marks the save dirty. */
     public void contributeProgressive(double stake) {
         progressive.contribute(stake, LbeConfig.progressiveShare);
@@ -72,6 +88,7 @@ public class CasinoStatsData extends WorldSavedData {
     /** Records a settled round and marks the save dirty. */
     public void record(UUID id, String name, String gameId, double bet, double totalReturn) {
         ledger.record(id, name, gameId, bet, totalReturn);
+        responsible.record(id, bet, totalReturn, LbeConfig.compRate, System.currentTimeMillis());
         markDirty();
     }
 
@@ -103,6 +120,19 @@ public class CasinoStatsData extends WorldSavedData {
         }
         if (tag.hasKey("progressive")) {
             progressive.restore(tag.getDouble("progressive"));
+        }
+        NBTTagList care = tag.getTagList("responsible", Constants.NBT.TAG_COMPOUND);
+        for (int i = 0; i < care.tagCount(); i++) {
+            NBTTagCompound entry = care.getCompoundTagAt(i);
+            try {
+                ResponsiblePlay.Player p = responsible.restore(UUID.fromString(entry.getString("id")));
+                ResponsiblePlay.restoreFields(p, entry.getDouble("points"), entry.getLong("day"),
+                    entry.getDouble("loss"), entry.getDouble("limit"), entry.getBoolean("pending"),
+                    entry.getDouble("pendingLimit"), entry.getLong("pendingAt"),
+                    entry.getLong("excludedUntil"));
+            } catch (IllegalArgumentException e) {
+                // One mangled entry loses one player's record, not the file.
+            }
         }
         NBTTagList wins = tag.getTagList("bigWins", Constants.NBT.TAG_COMPOUND);
         for (int i = 0; i < wins.tagCount(); i++) {
@@ -144,6 +174,22 @@ public class CasinoStatsData extends WorldSavedData {
         }
         tag.setTag("bigWins", wins);
         tag.setDouble("progressive", progressive.exactPool());
+        NBTTagList care = new NBTTagList();
+        for (Map.Entry<UUID, ResponsiblePlay.Player> entry : responsible.players().entrySet()) {
+            ResponsiblePlay.Player p = entry.getValue();
+            NBTTagCompound out = new NBTTagCompound();
+            out.setString("id", entry.getKey().toString());
+            out.setDouble("points", ResponsiblePlay.rawPoints(p));
+            out.setLong("day", ResponsiblePlay.rawDay(p));
+            out.setDouble("loss", p.lossToday());
+            out.setDouble("limit", p.limit());
+            out.setBoolean("pending", p.hasPendingRaise());
+            out.setDouble("pendingLimit", p.pendingLimit());
+            out.setLong("pendingAt", p.pendingAt());
+            out.setLong("excludedUntil", p.excludedUntil());
+            care.appendTag(out);
+        }
+        tag.setTag("responsible", care);
         return tag;
     }
 }

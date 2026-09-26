@@ -240,6 +240,13 @@ public class TileEntityCasinoMachine extends TileEntity {
             reject(player, refusal);
             return;
         }
+        // Exclusion and loss limits, before any money moves.
+        String care = CasinoStatsData.get(world).refusal(player.getUniqueID(),
+            rounded + atRisk(player.getUniqueID()));
+        if (care != null) {
+            reject(player, care);
+            return;
+        }
 
         Wager wager = LbeEconomy.bank().stake(player, rounded, game.displayName() + " wager");
         if (wager == null) {
@@ -518,6 +525,14 @@ public class TileEntityCasinoMachine extends TileEntity {
     }
 
     /**
+     * What a player already has riding on this machine that has not settled yet, so a loss limit
+     * counts it. Only a shared round lets bets pile up before settling.
+     */
+    protected double atRisk(UUID player) {
+        return 0.0;
+    }
+
+    /**
      * A bet on a shared round. Only {@link TileEntitySharedTable} takes these; anything else that
      * gets here returns the stake.
      */
@@ -552,6 +567,13 @@ public class TileEntityCasinoMachine extends TileEntity {
             return;
         }
         if (action == BlackjackGame.Action.DOUBLE || action == BlackjackGame.Action.SPLIT) {
+            String care = CasinoStatsData.get(world).refusal(player.getUniqueID(),
+                open.stakes.staked() + open.bet);
+            if (care != null) {
+                openHands.put(player.getUniqueID(), open);
+                sendBlackjackState(player, table, care);
+                return;
+            }
             Wager extra = LbeEconomy.bank().stake(player, open.bet,
                 "Blackjack " + (action == BlackjackGame.Action.DOUBLE ? "double" : "split"));
             if (extra == null) {

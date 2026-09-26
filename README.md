@@ -113,6 +113,11 @@ an override. (Usually the third.)
 /casino stats           your own record: rounds, stakes and net, per game and overall
 /casino stats <player>  someone else's record (operators only)
 /casino top             the biggest winners and recent big wins, as a leaderboard shows them
+/casino comps           your comp points, and what each loot box costs in them
+/casino redeem <tier>   spend comp points on a loot box
+/casino limit [amount|off]   see or set your daily loss limit (raising it waits 24 hours)
+/casino exclude <days> confirm   bar yourself from the casino; cannot be undone early
+/casino lift <player>   end a player's exclusion (operators only)
 ```
 
 ## Building

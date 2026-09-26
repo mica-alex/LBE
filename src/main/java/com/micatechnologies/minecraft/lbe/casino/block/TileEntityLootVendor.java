@@ -71,6 +71,12 @@ public class TileEntityLootVendor extends TileEntity {
                 null, "");
             return;
         }
+        if (CasinoStatsData.get(world).responsible().isExcluded(player.getUniqueID(),
+                System.currentTimeMillis())) {
+            status(player, TextFormatting.RED, "You have excluded yourself from the casino.", null,
+                "");
+            return;
+        }
         long now = world.getTotalWorldTime();
         Long until = pending.get(player.getUniqueID());
         if (until == null || now > until) {

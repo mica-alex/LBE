@@ -126,6 +126,15 @@ public class TileEntitySharedTable extends TileEntityCasinoMachine implements IT
             player);
     }
 
+    @Override
+    protected double atRisk(UUID player) {
+        double total = 0.0;
+        for (Bet bet : bets) {
+            total += bet.player.equals(player) ? bet.wager.amount() : 0.0;
+        }
+        return total;
+    }
+
     private static String noun(CasinoGame game) {
         return game == CasinoGame.PIG_RACE ? "race" : "wheel";
     }

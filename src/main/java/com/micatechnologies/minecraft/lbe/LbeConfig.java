@@ -102,6 +102,12 @@ public final class LbeConfig {
     /** What the progressive restarts at after it is won. */
     public static double progressiveSeed = 50.0;
 
+    /** Server-wide daily loss cap per player, or 0 for none. Players can set a lower one. */
+    public static double dailyLossCap = 0.0;
+
+    /** What a comp point is worth per unit staked, capped so comps can never be farmed. */
+    public static double compRate = 0.005;
+
     /** What a loot box vendor charges for each tier, lowest tier first. */
     public static final double[] BOX_PRICES = {10.0, 40.0, 150.0, 600.0};
 
@@ -723,6 +729,16 @@ public final class LbeConfig {
             (float) progressiveSeed, 0.0F, 1000000.0F,
             "What the progressive restarts at after it is won. This is new money each time it is "
                 + "won, so keep it modest relative to how much slots see between jackpots.");
+        dailyLossCap = config.getFloat("dailyLossCap", CATEGORY_CASINO, (float) dailyLossCap,
+            0.0F, 1.0E9F,
+            "The most a player may lose at the casino in one UTC day, or 0 for no cap. A bet is "
+                + "refused if losing all of it would pass the cap. Players can set their own lower "
+                + "limit with /casino limit.");
+        compRate = config.getFloat("compRate", CATEGORY_CASINO, (float) compRate, 0.0F, 0.005F,
+            "What comp points are worth, as a share of what is staked: players earn a point per "
+                + "unit staked, and a loot box costs its vendor price divided by this. 0 turns comps "
+                + "off. Capped at 0.005 because comps add straight onto every game's return, and "
+                + "above that perfect blackjack would pay to play.");
         for (com.micatechnologies.minecraft.lbe.rarity.Rarity tier
                 : com.micatechnologies.minecraft.lbe.rarity.Rarity.values()) {
             BOX_PRICES[tier.ordinal()] = config.getFloat("boxPrice_" + tier.id(), CATEGORY_CASINO,

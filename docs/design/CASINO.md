@@ -323,6 +323,23 @@ take away, and LBE already has loot boxes for that.
 **Video poker's double-or-nothing.** Deferred rather than excluded. It stakes a payout that has
 already settled, which `Wager` cannot express — that is a wager-model change, not a game.
 
+## Looking after players: comps, loss limits, self-exclusion
+
+`casino/stats/ResponsiblePlay` (pure; saved with the ledger) keeps three things per player.
+
+- **Comp points.** One per unit staked, redeemable for loot boxes with `/casino redeem`. A box
+  costs its vendor price divided by `compRate`. A comp is a rebate, which adds straight onto every
+  game's return, so the rate is capped at 0.5%: even blackjack played perfectly then returns
+  99.93%, and `HouseEdgeTest` pins that comps can never be farmed.
+- **Daily loss limits.** An operator's server-wide `dailyLossCap` (off by default) and a player's
+  own `/casino limit`; the smaller applies. A bet is refused if losing all of it, plus anything
+  already riding on the machine, would pass the limit. Lowering a limit is immediate; raising or
+  removing one waits 24 hours. Days are UTC.
+- **Self-exclusion.** `/casino exclude <days> confirm` bars a player from every machine and the
+  vendor. They cannot end it early; an operator can, with `/casino lift`.
+
+Every check runs before any money moves, including blackjack's extra stakes.
+
 ## Shared rounds: the big wheel and the pig race
 
 Everyone at the machine shares one round. The first bet opens a 20-second window; anyone can add

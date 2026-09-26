@@ -265,6 +265,11 @@ class HouseEdgeTest {
         assertInBand("slots with the largest progressive share",
             ProgressiveJackpot.slotsReturnWith(ProgressiveJackpot.MAX_SHARE));
         assertInBand("blackjack (perfect play)", BlackjackMath.returnToPlayer());
+        // Comps are a rebate on everything staked. At their capped rate, even the best game here,
+        // played perfectly, still returns less than it takes: comps cannot be farmed.
+        assertInBand("blackjack (perfect play) with the most comps a server can give",
+            BlackjackMath.returnToPlayer()
+                + com.micatechnologies.minecraft.lbe.casino.stats.ResponsiblePlay.MAX_COMP_RATE);
         for (com.micatechnologies.minecraft.lbe.casino.wheel.BigWheel.Segment segment
                 : com.micatechnologies.minecraft.lbe.casino.wheel.BigWheel.Segment.values()) {
             if (segment.isBettable()) {
