@@ -102,6 +102,15 @@ public final class LbeConfig {
     /** What the progressive restarts at after it is won. */
     public static double progressiveSeed = 50.0;
 
+    /** What a loot box vendor charges for each tier, lowest tier first. */
+    public static final double[] BOX_PRICES = {10.0, 40.0, 150.0, 600.0};
+
+    /** A vendor's price for a tier. */
+    public static double boxPrice(com.micatechnologies.minecraft.lbe.rarity.Rarity tier) {
+        int i = tier.ordinal();
+        return i >= 0 && i < BOX_PRICES.length ? BOX_PRICES[i] : BOX_PRICES[BOX_PRICES.length - 1];
+    }
+
     // --- general ----------------------------------------------------------------------------------
 
     /** Master switch for natural loot-box generation. Off still leaves the boxes placeable by hand. */
@@ -714,6 +723,13 @@ public final class LbeConfig {
             (float) progressiveSeed, 0.0F, 1000000.0F,
             "What the progressive restarts at after it is won. This is new money each time it is "
                 + "won, so keep it modest relative to how much slots see between jackpots.");
+        for (com.micatechnologies.minecraft.lbe.rarity.Rarity tier
+                : com.micatechnologies.minecraft.lbe.rarity.Rarity.values()) {
+            BOX_PRICES[tier.ordinal()] = config.getFloat("boxPrice_" + tier.id(), CATEGORY_CASINO,
+                (float) BOX_PRICES[tier.ordinal()], 0.01F, 1000000.0F,
+                "What a loot box vendor charges for a " + tier.id() + " box. The money leaves the "
+                    + "economy, like a lost bet.");
+        }
 
         if (config.hasChanged()) {
             config.save();

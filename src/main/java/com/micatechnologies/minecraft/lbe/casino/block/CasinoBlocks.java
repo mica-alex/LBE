@@ -37,6 +37,10 @@ public final class CasinoBlocks {
     private static BlockCasinoLeaderboard leaderboard;
     private static ItemBlock leaderboardItem;
 
+    /** The loot box vendor, and its item. */
+    private static BlockLootVendor vendor;
+    private static ItemBlock vendorItem;
+
     /** The progressive jackpot sign, and its item. */
     private static BlockProgressiveSign progressiveSign;
     private static ItemBlock progressiveSignItem;
@@ -55,6 +59,13 @@ public final class CasinoBlocks {
         leaderboardItem = registerItemBlock(leaderboard);
         progressiveSign = LbeRegistry.addBlock(new BlockProgressiveSign());
         progressiveSignItem = registerItemBlock(progressiveSign);
+        vendor = LbeRegistry.addBlock(new BlockLootVendor());
+        vendorItem = registerItemBlock(vendor);
+    }
+
+    /** The vendor's item form. Null before {@link #init()}. */
+    public static ItemBlock vendorItem() {
+        return vendorItem;
     }
 
     /** The progressive sign's item form. Null before {@link #init()}. */

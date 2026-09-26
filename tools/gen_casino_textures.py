@@ -282,6 +282,24 @@ def main():
     write_png(os.path.join(OUT_DIR, "progressive_sign_side.png"), board_side)
     written += 2
     print("wrote progressive_sign")
+
+    # The loot box vendor: a teal cabinet with gold bands. Its window is a separate texture for
+    # the recess's back wall, lit so the box turning in front of it stands out.
+    vendor = body((0x1E, 0x5A, 0x5E), (0x10, 0x34, 0x38))
+    box(vendor, 1, 1, 14, 2, GOLD)
+    box(vendor, 1, 1, 14, 1, GOLD_LIT)
+    box(vendor, 1, 13, 14, 13, GOLD)
+    box(vendor, 6, 14, 9, 14, BLACK)          # the coin slot
+    vendor_side = body((0x1E, 0x5A, 0x5E), (0x10, 0x34, 0x38))
+    box(vendor_side, 1, 1, 14, 2, GOLD)
+    vendor_top = body((0x10, 0x34, 0x38), BLACK)
+    window = grid((0x0C, 0x1C, 0x30))
+    frame(window, (0x2A, 0x4C, 0x70))
+    for name, rows in (("loot_box_vendor_front", vendor), ("loot_box_vendor_side", vendor_side),
+                       ("loot_box_vendor_top", vendor_top), ("loot_box_vendor_window", window)):
+        write_png(os.path.join(OUT_DIR, name + ".png"), rows)
+        written += 1
+    print("wrote loot_box_vendor")
     print("%d textures written" % written)
 
 

@@ -211,6 +211,14 @@ and `HouseEdgeTest` pins both the default (85.0%) and the cap. The paytable was 
 retuned to absorb it. The pool is only fed and emptied **after** a payout succeeds, so a failed
 settlement leaves it untouched. A progressive sign block shows the live pool.
 
+**The loot box vendor** sells a tier of box for money: the one place the casino's currency buys
+into the mod's other half. Sneak-right-click shows the next tier; right-click asks, and a second
+right-click within three seconds buys. So a stray click never spends money, and
+`PacketCasinoPlay` stays the only message a client can send the casino. The price
+(`boxPrice_<tier>`) is staked through `CasinoBank` and forfeited, exactly like a lost bet, so it
+passes through SUM's escrow and leaves the economy: a money sink with no new SUM surface. The
+server formats the price the vendor displays, because config is never synced.
+
 **The ledger and the leaderboard.** Every settled round is added to a per-player, per-game ledger
 (`casino/stats/CasinoLedger`, pure; saved as `data/lbe_casino_stats.dat` by `CasinoStatsData`). It
 records money that has already moved, and nothing that decides a game reads it. A big win joins
