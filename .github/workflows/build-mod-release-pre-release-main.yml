@@ -271,8 +271,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # $RELEASE_FILES is read from the environment rather than pasted in with ${{ }}, so a
-          # file name can never be interpreted as shell.
+          # $RELEASE_FILES is read from the environment rather than pasted in as an Actions
+          # expression, so a file name can never be interpreted as shell. (Never write the
+          # expression syntax itself in a comment here: Actions expands it inside run: blocks,
+          # comments included, and an empty one makes the whole workflow file invalid.)
           mapfile -t files < <(printf '%s\n' "$RELEASE_FILES" | sed '/^$/d')
           bash .github/scripts/upload-release-assets.sh "$CHOSEN_TAG" "${files[@]}"
 
