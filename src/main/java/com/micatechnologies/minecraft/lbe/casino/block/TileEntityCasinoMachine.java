@@ -105,6 +105,12 @@ public class TileEntityCasinoMachine extends TileEntity {
     private long displayArrivedAt = -1L;
 
     /**
+     * Counts settled rounds, so a client can tell a new round from any other update. Without it,
+     * dyeing a machine (or anything else that re-sends its state) replayed the last round's reveal.
+     */
+    private int displayRound;
+
+    /**
      * The neon trim's dye colour ({@code EnumDyeColor} metadata), or -1 for none.
      *
      * <p>The one thing about a machine that <b>is</b> saved: it is decoration somebody chose, not
@@ -243,6 +249,10 @@ public class TileEntityCasinoMachine extends TileEntity {
         markPlayed(player);
 
         // Past this point the money is held and MUST be settled on every path.
+        if (game.isSharedRound()) {
+            joinRound(player, game, optionA, wager, rounded);
+            return;
+        }
         if (game.takesStakeUpFront()) {
             deal(player, game, optionA, wager, rounded);
             return;
@@ -308,7 +318,7 @@ public class TileEntityCasinoMachine extends TileEntity {
      * @param staked everything the player staked in the round
      * @param bonus the progressive's share of {@code totalReturn}, or 0
      */
-    private void afterSettle(EntityPlayerMP player, CasinoGame game, double multiplier,
+    protected void afterSettle(EntityPlayerMP player, CasinoGame game, double multiplier,
                              double staked, double totalReturn, int[] reveal, String describe,
                              CasinoFanfare fanfare, boolean nerves, int revealTicks,
                              double bonus) {
@@ -384,6 +394,12 @@ public class TileEntityCasinoMachine extends TileEntity {
             case MINES:
                 // Clamped by the game rather than refused, so a nonsense count still gives a board.
                 return null;
+            case BIG_WHEEL:
+                return com.micatechnologies.minecraft.lbe.casino.wheel.BigWheel.Segment
+                    .bettable(optionA) != null ? null : "Back a segment on the wheel.";
+            case PIG_RACE:
+                return com.micatechnologies.minecraft.lbe.casino.race.PigRace.Pig
+                    .byCode(optionA) != null ? null : "Back one of the pigs.";
             case KENO:
                 return KenoGame.isValid(toPicks(numbers)) ? null
                     : "Pick between 1 and " + KenoGame.MAX_PICKS + " numbers from 1 to "
@@ -499,6 +515,16 @@ public class TileEntityCasinoMachine extends TileEntity {
     private static CasinoFanfare fanfareOf(GameResult result) {
         boolean topPrize = result instanceof SlotSpin && ((SlotSpin) result).isJackpot();
         return CasinoFanfare.of(result.totalReturnMultiplier(), topPrize);
+    }
+
+    /**
+     * A bet on a shared round. Only {@link TileEntitySharedTable} takes these; anything else that
+     * gets here returns the stake.
+     */
+    protected void joinRound(EntityPlayerMP player, CasinoGame game, int option, Wager wager,
+                             double bet) {
+        wager.cancel();
+        reject(player, "This machine cannot take that bet.");
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -862,18 +888,18 @@ public class TileEntityCasinoMachine extends TileEntity {
             com.micatechnologies.minecraft.lbe.casino.cards.Suit.values()[wrapped % 4]);
     }
 
-    private static double round(double amount) {
+    protected static double round(double amount) {
         return Math.floor(amount * 100.0) / 100.0;
     }
 
-    private double balanceOf(EntityPlayerMP player) {
+    protected double balanceOf(EntityPlayerMP player) {
         OptionalDouble balance = LbeEconomy.bank().balance(player);
         // -1 is the wire's "unknown", which a screen draws as a dash rather than as zero. Showing a
         // player $0.00 when the truth is "we could not ask" would read as being robbed.
         return balance.isPresent() ? balance.getAsDouble() : PacketCasinoResult.UNKNOWN_BALANCE;
     }
 
-    private void reject(EntityPlayerMP player, String message) {
+    protected void reject(EntityPlayerMP player, String message) {
         String text = message == null || message.isEmpty() ? "That bet was refused." : message;
         player.sendMessage(new TextComponentString(text)
             .setStyle(new Style().setColor(TextFormatting.RED)));
@@ -917,6 +943,7 @@ public class TileEntityCasinoMachine extends TileEntity {
     /** Server: records a settled round for the room to see, and sends it to whoever is watching. */
     private void showRound(int[] reveal, CasinoFanfare fanfare, int revealTicks, String payout) {
         display = reveal.clone();
+        displayRound++;
         displayPayout = payout;
         displayFanfare = fanfare.ordinal();
         displayRevealTicks = revealTicks;
@@ -960,11 +987,12 @@ public class TileEntityCasinoMachine extends TileEntity {
             : net.minecraft.item.EnumDyeColor.byMetadata(trim).getColorValue();
     }
 
-    private NBTTagCompound writeDisplay(NBTTagCompound tag) {
+    protected NBTTagCompound writeDisplay(NBTTagCompound tag) {
         tag.setIntArray("lbeShow", display);
         tag.setByte("lbeFanfare", (byte) displayFanfare);
         tag.setShort("lbeRevealTicks", (short) displayRevealTicks);
         tag.setString("lbePayout", displayPayout);
+        tag.setInteger("lbeRound", displayRound);
         tag.setByte("lbeTrim", (byte) trim);
         return tag;
     }
@@ -975,7 +1003,7 @@ public class TileEntityCasinoMachine extends TileEntity {
      * @param live true for a round that has just been played, which animates; false for the state
      *     sent with the chunk, which is shown as already settled
      */
-    private void readDisplay(NBTTagCompound tag, boolean live) {
+    protected void readDisplay(NBTTagCompound tag, boolean live) {
         if (tag.hasKey("lbeTrim")) {
             trim = clampTrim(tag.getByte("lbeTrim"));
         }
@@ -991,7 +1019,14 @@ public class TileEntityCasinoMachine extends TileEntity {
         displayRevealTicks = Math.max(0, tag.getShort("lbeRevealTicks"));
         String payout = tag.getString("lbePayout");
         displayPayout = payout.length() <= 32 ? payout : "";
-        displayArrivedAt = live && world != null ? world.getTotalWorldTime() : -1L;
+        int round = tag.getInteger("lbeRound");
+        if (!live) {
+            displayArrivedAt = -1L;
+        } else if (round != displayRound && world != null) {
+            // Only a round that has not been seen animates; anything else keeps its timing.
+            displayArrivedAt = world.getTotalWorldTime();
+        }
+        displayRound = round;
     }
 
     @Override

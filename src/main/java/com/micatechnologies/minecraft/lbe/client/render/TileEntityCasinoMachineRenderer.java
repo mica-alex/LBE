@@ -5,6 +5,9 @@ import com.micatechnologies.minecraft.lbe.casino.CasinoFanfare;
 import com.micatechnologies.minecraft.lbe.casino.CasinoGame;
 import com.micatechnologies.minecraft.lbe.casino.block.BlockCasinoMachine;
 import com.micatechnologies.minecraft.lbe.casino.block.TileEntityCasinoMachine;
+import com.micatechnologies.minecraft.lbe.casino.block.TileEntitySharedTable;
+import com.micatechnologies.minecraft.lbe.casino.race.PigRace;
+import com.micatechnologies.minecraft.lbe.casino.wheel.BigWheel;
 import com.micatechnologies.minecraft.lbe.casino.cards.Card;
 import com.micatechnologies.minecraft.lbe.casino.coinflip.CoinFlipGame;
 import com.micatechnologies.minecraft.lbe.casino.mines.MinesGame;
@@ -113,6 +116,18 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
         GlStateManager.popMatrix();
 
         drawLamp(game, round);
+
+        if (tile instanceof TileEntitySharedTable) {
+            GlStateManager.pushMatrix();
+            beginScreen();
+            if (game == CasinoGame.BIG_WHEEL) {
+                drawBigWheel((TileEntitySharedTable) tile, partialTicks, round.time);
+            } else if (game == CasinoGame.PIG_RACE) {
+                drawRaceBoard((TileEntitySharedTable) tile, partialTicks, round.time);
+            }
+            endScreen();
+            GlStateManager.popMatrix();
+        }
 
         GlStateManager.popMatrix();
         drawPayout(game, round, tile.displayPayout(), x, y, z);
@@ -463,6 +478,195 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
             }
         }
         return false;
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Shared rounds: the big wheel and the race board
+    // ---------------------------------------------------------------------------------------------
+
+    /** 0 at the start of a shared reveal, 1 at its end; 1 when it arrived with the chunk. */
+    private static double sharedProgress(TileEntitySharedTable table, float partialTicks) {
+        double since = table.ticksInPhase(partialTicks);
+        return since < 0.0 ? 1.0
+            : Math.min(1.0, since / CasinoFanfare.SHARED_REVEAL_TICKS);
+    }
+
+    private static int segmentColour(BigWheel.Segment segment) {
+        switch (segment) {
+            case ONE:
+                return 0xFFE8C840;
+            case THREE:
+                return 0xFF2E6FD8;
+            case SEVEN:
+                return 0xFF2FA84A;
+            case FIFTEEN:
+                return 0xFF8A3FD0;
+            case TWENTY_THREE:
+                return 0xFFE07A20;
+            case FORTY_SEVEN:
+                return 0xFFD02A2A;
+            default:
+                return 0xFF141414;
+        }
+    }
+
+    /**
+     * The wheel: two blocks across, mounted on the front of the cabinet with its pointer at the
+     * top. It turns lazily until a round resolves, then spins down onto the result the server
+     * drew, in step with every bettor's screen.
+     */
+    private void drawBigWheel(TileEntitySharedTable table, float partialTicks, double time) {
+        GlStateManager.translate(0.0D, 2.15D, 6.0D / 16.0D);
+        GlStateManager.scale(UNIT, -UNIT, UNIT);
+        double segment = Math.PI * 2.0D / BigWheel.SEGMENTS;
+        double rotation;
+        boolean revealing = table.phase() == TileEntitySharedTable.Phase.REVEALING
+            && table.outcome() >= 0;
+        double progress = revealing ? sharedProgress(table, partialTicks) : 0.0;
+        if (revealing) {
+            double rest = -Math.PI / 2.0D - (table.outcome() + 0.5D) * segment;
+            double remaining = 1.0D - progress;
+            rotation = rest - 6.0D * Math.PI * remaining * remaining;
+        } else {
+            rotation = time * 0.01D;
+        }
+
+        GlStateManager.disableTexture2D();
+        Tessellator tessellator = Tessellator.getInstance();
+        BufferBuilder buffer = tessellator.getBuffer();
+        buffer.begin(4, DefaultVertexFormats.POSITION_COLOR);
+        double inner = 22.0D;
+        double outer = 58.0D;
+        for (int i = 0; i < BigWheel.SEGMENTS; i++) {
+            int colour = segmentColour(BigWheel.segmentAt(i));
+            double a0 = rotation + i * segment;
+            double a1 = a0 + segment * 0.96D;   // a hairline gap between segments
+            quad(buffer, a0, a1, inner, outer, Z_BACK, colour);
+        }
+        // A gold rim, a dark hub, and the pointer.
+        quad(buffer, 0.0D, Math.PI * 2.0D, outer, outer + 4.0D, Z_BACK, 0xFFD4A020);
+        quad(buffer, 0.0D, Math.PI * 2.0D, 0.0D, inner, Z_BACK, 0xFF201810);
+        int pointer = 0xFFF4F4F4;
+        vertex(buffer, -4.0D, -outer - 9.0D, Z_MID, pointer);
+        vertex(buffer, 0.0D, -outer + 3.0D, Z_MID, pointer);
+        vertex(buffer, 4.0D, -outer - 9.0D, Z_MID, pointer);
+        tessellator.draw();
+        GlStateManager.enableTexture2D();
+
+        // Each segment's price, reading outward.
+        FontRenderer font = getFontRenderer();
+        if (font != null) {
+            for (int i = 0; i < BigWheel.SEGMENTS; i++) {
+                BigWheel.Segment here = BigWheel.segmentAt(i);
+                String label = here == BigWheel.Segment.HOUSE ? "*" : String.valueOf(here.pays());
+                double angle = rotation + (i + 0.5D) * segment;
+                GlStateManager.pushMatrix();
+                GlStateManager.rotate((float) Math.toDegrees(angle) + 90.0F, 0.0F, 0.0F, 1.0F);
+                GlStateManager.translate(0.0F, -47.0F, Z_FRONT);
+                GlStateManager.scale(0.5F, 0.5F, 1.0F);
+                font.drawString(label, -font.getStringWidth(label) / 2, 0,
+                    here == BigWheel.Segment.ONE ? 0x201800 : 0xFFFFFF);
+                GlStateManager.popMatrix();
+            }
+        }
+
+        // The hub: time to bet, or where it stopped.
+        String hub;
+        int hubColour = 0xFFFFFF;
+        if (revealing && progress >= 1.0D) {
+            BigWheel.Segment landed = BigWheel.segmentAt(table.outcome());
+            hub = landed.label();
+            hubColour = segmentColour(landed) & 0xFFFFFF;
+        } else if (table.phase() == TileEntitySharedTable.Phase.OPEN) {
+            hub = table.secondsToClose(partialTicks) + "s";
+        } else if (revealing) {
+            hub = "";
+        } else {
+            hub = "BET";
+        }
+        if (!hub.isEmpty()) {
+            text(hub, 0.0F, -5.0F, hubColour, 1.0F);
+        }
+    }
+
+    /** One ring slice, from angle a0 to a1 and radius r0 to r1, as triangles. */
+    private static void quad(BufferBuilder buffer, double a0, double a1, double r0, double r1,
+                             float z, int colour) {
+        int steps = Math.max(1, (int) Math.ceil((a1 - a0) / 0.2D));
+        for (int s = 0; s < steps; s++) {
+            double b0 = a0 + (a1 - a0) * s / steps;
+            double b1 = a0 + (a1 - a0) * (s + 1) / steps;
+            vertex(buffer, Math.cos(b0) * r0, Math.sin(b0) * r0, z, colour);
+            vertex(buffer, Math.cos(b0) * r1, Math.sin(b0) * r1, z, colour);
+            vertex(buffer, Math.cos(b1) * r1, Math.sin(b1) * r1, z, colour);
+            vertex(buffer, Math.cos(b0) * r0, Math.sin(b0) * r0, z, colour);
+            vertex(buffer, Math.cos(b1) * r1, Math.sin(b1) * r1, z, colour);
+            vertex(buffer, Math.cos(b1) * r0, Math.sin(b1) * r0, z, colour);
+        }
+    }
+
+    /**
+     * The tote board: three blocks across, standing on the cabinet. Six lanes, each pig's name and
+     * price, and the race itself, drawn from the round's seed so every watcher sees the same one.
+     * Only the winner is the server's; the jostling on the way is for show, and the winner always
+     * crosses first.
+     */
+    private void drawRaceBoard(TileEntitySharedTable table, float partialTicks, double time) {
+        GlStateManager.translate(0.0D, 2.75D, 5.0D / 16.0D);
+        GlStateManager.scale(UNIT, -UNIT, UNIT);
+        rect(-97.0F, -45.0F, 97.0F, 45.0F, 0xFFD4A020, Z_BACK);
+        rect(-95.0F, -43.0F, 95.0F, 43.0F, 0xFF0E2A18, Z_BACK + 0.05F);
+
+        boolean revealing = table.phase() == TileEntitySharedTable.Phase.REVEALING
+            && table.outcome() >= 0;
+        double progress = revealing ? sharedProgress(table, partialTicks) : 0.0;
+        PigRace.Pig[] pigs = PigRace.Pig.values();
+        String status;
+        if (revealing && progress >= 1.0D) {
+            status = "WINNER: " + pigs[Math.floorMod(table.outcome(), pigs.length)].displayName();
+        } else if (revealing) {
+            status = "AND THEY'RE OFF!";
+        } else if (table.phase() == TileEntitySharedTable.Phase.OPEN) {
+            status = "BETS CLOSE IN " + table.secondsToClose(partialTicks) + "s";
+        } else {
+            status = "PLACE YOUR BETS";
+        }
+        text("PIG RACE", -70.0F, -40.0F, 0xFFD040, 0.7F);
+        text(status, 40.0F, -39.0F, 0xFFFFFF, 0.6F);
+
+        float trackLeft = -36.0F;
+        float trackRight = 84.0F;
+        rect(trackRight, -31.0F, trackRight + 1.5F, 41.0F, 0xFFF4F4F4, Z_MID);
+        for (int i = 0; i < pigs.length; i++) {
+            float laneTop = -31.0F + i * 12.0F;
+            boolean winner = revealing && progress >= 1.0D && table.outcome() == i;
+            rect(-95.0F, laneTop, 95.0F, laneTop + 11.0F,
+                winner ? 0xFF6A5010 : (i % 2 == 0 ? 0xFF143A22 : 0xFF10321C), Z_BACK + 0.1F);
+            text(pigs[i].displayName(), -64.0F, laneTop + 2.0F, 0xFFFFFF, 0.45F);
+            text(String.format(java.util.Locale.ROOT, "%.1fx", pigs[i].returnMultiplier()),
+                -44.0F, laneTop + 2.0F, 0x7CFC7C, 0.45F);
+            double position = revealing
+                ? pigPosition(table.seed(), i, i == table.outcome(), progress) : 0.0;
+            float x = trackLeft + (float) position * (trackRight - trackLeft - 10.0F);
+            float bob = (float) Math.abs(Math.sin(time * 0.6D + i)) * (revealing ? 1.2F : 0.3F);
+            float y = laneTop + 3.0F - bob;
+            rect(x, y, x + 9.0F, y + 5.5F, 0xFFF0A0B4, Z_MID);          // body
+            rect(x + 8.0F, y + 1.5F, x + 10.5F, y + 4.0F, 0xFFD87890, Z_MID + 0.1F);   // snout
+            rect(x + 6.5F, y - 1.0F, x + 8.0F, y + 0.5F, 0xFFD87890, Z_MID + 0.1F);   // ear
+        }
+    }
+
+    /**
+     * Where a pig is along the track, 0 to 1, at {@code t} into the race. The winner reaches the
+     * line exactly as the race ends; every other pig finishes later, so it cannot win on screen.
+     */
+    private static double pigPosition(long seed, int lane, boolean winner, double t) {
+        java.util.Random random = new java.util.Random(seed ^ (lane * 0x9E3779B97F4A7C15L));
+        double finish = winner ? 1.0D : 1.06D + random.nextDouble() * 0.4D;
+        double phase = random.nextDouble() * 6.0D;
+        double pace = t / finish;
+        double wobble = 0.05D * Math.sin(t * 11.0D + phase) * (1.0D - Math.min(1.0D, pace));
+        return Math.max(0.0D, Math.min(1.0D, pace + wobble));
     }
 
     // ---------------------------------------------------------------------------------------------

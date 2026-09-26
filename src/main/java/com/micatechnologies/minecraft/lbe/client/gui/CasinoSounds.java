@@ -61,6 +61,21 @@ final class CasinoSounds {
                     play(SoundEvents.BLOCK_NOTE_HAT, 0.15F, 1.8F);
                 }
                 break;
+            case BIG_WHEEL:
+                // The clapper on the pegs: fast, then slowing over the longer shared reveal.
+                if (tick >= nextRouletteClick) {
+                    play(SoundEvents.BLOCK_NOTE_HAT, 0.45F, 1.2F + cosmetic.nextFloat() * 0.1F);
+                    nextRouletteClick = tick + 1 + tick / 14;
+                }
+                break;
+            case PIG_RACE:
+                if (tick % 4 == 0) {
+                    play(SoundEvents.ENTITY_PIG_STEP, 0.4F, 0.9F + cosmetic.nextFloat() * 0.3F);
+                }
+                if (tick % 23 == 0) {
+                    play(SoundEvents.ENTITY_PIG_AMBIENT, 0.5F, 0.9F + cosmetic.nextFloat() * 0.4F);
+                }
+                break;
             case ROULETTE:
                 if (tick >= nextRouletteClick) {
                     play(SoundEvents.BLOCK_NOTE_HAT, 0.35F, 1.5F + cosmetic.nextFloat() * 0.2F);

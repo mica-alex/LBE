@@ -74,6 +74,13 @@ public class PacketCasinoResult implements IMessage {
         return packet;
     }
 
+    /** A balance with a line for the player, e.g. confirming a bet on a shared round. */
+    public static PacketCasinoResult notice(CasinoGame game, double balance, String message) {
+        PacketCasinoResult packet = balanceOnly(game, balance);
+        packet.message = message == null ? "" : message;
+        return packet;
+    }
+
     /** The middle of a two-step game: the stake is taken and something has been dealt. */
     public static PacketCasinoResult dealt(CasinoGame game, double balance, int[] reveal,
                                            String message) {

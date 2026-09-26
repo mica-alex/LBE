@@ -45,6 +45,15 @@ public enum CasinoFanfare {
      */
     public static final int REVEAL_TICKS = 44;
 
+    /**
+     * How long a shared round's spin or race runs before its result shows. Longer than a machine's
+     * reveal: a crowd is watching, and the wait is the show.
+     */
+    public static final int SHARED_REVEAL_TICKS = 100;
+
+    /** How long a shared round takes bets after the first one, in ticks. */
+    public static final int BETTING_WINDOW_TICKS = 20 * 20;
+
     /** When each slot reel stops spinning, in ticks into the reveal. Staggered so they land 1-2-3. */
     public static final int[] REEL_STOP_TICKS = {24, 34, 44};
 

@@ -94,6 +94,9 @@ public class Lbe {
         GameRegistry.registerTileEntity(TileEntityCasinoMachine.class,
             new ResourceLocation(LbeConstants.MOD_NAMESPACE, "casino_machine"));
         GameRegistry.registerTileEntity(
+            com.micatechnologies.minecraft.lbe.casino.block.TileEntitySharedTable.class,
+            new ResourceLocation(LbeConstants.MOD_NAMESPACE, "shared_table"));
+        GameRegistry.registerTileEntity(
             com.micatechnologies.minecraft.lbe.casino.block.TileEntityCasinoLeaderboard.class,
             new ResourceLocation(LbeConstants.MOD_NAMESPACE, "casino_leaderboard"));
         GameRegistry.registerTileEntity(

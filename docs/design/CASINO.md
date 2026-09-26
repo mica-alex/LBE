@@ -239,7 +239,7 @@ in the tile entity's NBT because it is decoration somebody chose, not game state
 
 ## The games
 
-Eleven, all sharing one block class, one tile entity, one screen and one pair of packets. Adding
+Thirteen, all sharing one block class, one screen and one pair of packets. Adding
 another is: pure logic in its own package, a constant in `CasinoGame`, a branch in
 `TileEntityCasinoMachine.resolve`, a branch in `GuiCasinoMachine.drawReveal`, and a motif in
 `tools/gen_casino_textures.py`. Nothing that moves money is touched.
@@ -256,6 +256,8 @@ another is: pure logic in its own package, a constant in `CasinoGame`, a branch 
 | Baccarat | 98.6 / 98.9 / 85.6% | `baccarat_game.py` | no — the 5% banker commission is its edge |
 | Video poker | 70% naive → ~99.5% optimal | `video_poker_game.py` (9/6 Jacks or Better) | no |
 | Mines | 96% at every stopping point | `mines_game.py` | no |
+| Big wheel | 96.0% on every segment | new | shared rounds; counts x payouts are 48 for every segment |
+| Pig race | 90.0% on every pig | new | shared rounds; fixed odds, not a pool |
 | Blackjack | 99.43% perfect play, less otherwise | `blackjack_game.py` | rules pinned: S17, 3:2, DAS, split once, infinite deck, no insurance/surrender |
 
 ### Why four games needed repricing
@@ -320,6 +322,23 @@ take away, and LBE already has loot boxes for that.
 
 **Video poker's double-or-nothing.** Deferred rather than excluded. It stakes a payout that has
 already settled, which `Wager` cannot express — that is a wager-model change, not a game.
+
+## Shared rounds: the big wheel and the pig race
+
+Everyone at the machine shares one round. The first bet opens a 20-second window; anyone can add
+bets until it closes; then one spin or race settles every bet, each through the bank like any
+other, and each bettor gets their own result while the room watches the wheel or the race board.
+`TileEntitySharedTable` holds the round in memory and refunds it if the machine unloads. A player
+who logs off stays in the round: the bank pays a winner only while online and otherwise leaves
+the stake held, so nothing is lost.
+
+**Every bet is the same bet**, as everywhere else here. The wheel's segment counts and payouts are
+chosen together so every segment returns 96%. The race uses **fixed odds** priced to return 90% on
+every pig, rather than a pari-mutuel pool, because a pool only works with a crowd: a lone winner
+would get back less than they staked.
+
+The race's look is generated on each client from the round's seed, so everyone sees the same race;
+only the winner comes from the server, and the renderer guarantees it crosses first.
 
 ## Several stakes in one round: `WagerSet`
 

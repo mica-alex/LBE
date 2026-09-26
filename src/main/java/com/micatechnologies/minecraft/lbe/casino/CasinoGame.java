@@ -25,7 +25,9 @@ public enum CasinoGame {
     BACCARAT("baccarat_table", "Baccarat", Cabinet.TABLE),
     VIDEO_POKER("video_poker_machine", "Video Poker", Cabinet.TALL),
     MINES("mines_machine", "Mines", Cabinet.TALL),
-    BLACKJACK("blackjack_table", "Blackjack", Cabinet.TABLE);
+    BLACKJACK("blackjack_table", "Blackjack", Cabinet.TABLE),
+    BIG_WHEEL("big_wheel", "Big Wheel", Cabinet.TALL),
+    PIG_RACE("pig_race", "Pig Race", Cabinet.TALL);
 
     /** What shape of block the game sits in. */
     public enum Cabinet {
@@ -74,6 +76,14 @@ public enum CasinoGame {
      */
     public boolean takesStakeUpFront() {
         return this == HIGH_LOW || this == VIDEO_POKER || this == MINES || this == BLACKJACK;
+    }
+
+    /**
+     * Whether everyone at the machine shares one round: bets are gathered during a betting window,
+     * then one spin or one race settles all of them. The big wheel and the pig race.
+     */
+    public boolean isSharedRound() {
+        return this == BIG_WHEEL || this == PIG_RACE;
     }
 
     /** Whether a round can run for an unbounded number of choices. Mines, so far. */

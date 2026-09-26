@@ -48,6 +48,12 @@
     },
     "blackjack_table": {
       "trigger": "minecraft:impossible"
+    },
+    "big_wheel": {
+      "trigger": "minecraft:impossible"
+    },
+    "pig_race": {
+      "trigger": "minecraft:impossible"
     }
   },
   "requirements": [
@@ -83,6 +89,12 @@
     ],
     [
       "blackjack_table"
+    ],
+    [
+      "big_wheel"
+    ],
+    [
+      "pig_race"
     ]
   ]
 }

@@ -235,7 +235,11 @@ public class BlockCasinoMachine extends Block {
     @Override
     @Nullable
     public TileEntity createTileEntity(World world, IBlockState state) {
-        return state.getValue(HALF) ? null : new TileEntityCasinoMachine();
+        if (state.getValue(HALF)) {
+            return null;
+        }
+        // Shared rounds tick, to close their betting window; every other machine does not.
+        return game.isSharedRound() ? new TileEntitySharedTable() : new TileEntityCasinoMachine();
     }
 
     /**

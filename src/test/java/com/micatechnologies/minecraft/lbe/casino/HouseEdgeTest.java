@@ -265,6 +265,18 @@ class HouseEdgeTest {
         assertInBand("slots with the largest progressive share",
             ProgressiveJackpot.slotsReturnWith(ProgressiveJackpot.MAX_SHARE));
         assertInBand("blackjack (perfect play)", BlackjackMath.returnToPlayer());
+        for (com.micatechnologies.minecraft.lbe.casino.wheel.BigWheel.Segment segment
+                : com.micatechnologies.minecraft.lbe.casino.wheel.BigWheel.Segment.values()) {
+            if (segment.isBettable()) {
+                assertInBand("big wheel " + segment.label(),
+                    com.micatechnologies.minecraft.lbe.casino.wheel.BigWheel.returnToPlayer(segment));
+            }
+        }
+        for (com.micatechnologies.minecraft.lbe.casino.race.PigRace.Pig pig
+                : com.micatechnologies.minecraft.lbe.casino.race.PigRace.Pig.values()) {
+            assertInBand("pig race " + pig.displayName(),
+                com.micatechnologies.minecraft.lbe.casino.race.PigRace.returnToPlayer(pig));
+        }
         assertInBand("coin flip", CoinFlipGame.returnToPlayer());
         assertInBand("war", WarGame.returnToPlayer());
         assertInBand("high-low (worst call)", HighLowGame.worstReturnToPlayer());

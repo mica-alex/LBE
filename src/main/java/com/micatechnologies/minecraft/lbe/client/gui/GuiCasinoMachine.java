@@ -9,6 +9,8 @@ import com.micatechnologies.minecraft.lbe.casino.baccarat.BaccaratGame;
 import com.micatechnologies.minecraft.lbe.casino.blackjack.BlackjackGame;
 import com.micatechnologies.minecraft.lbe.casino.blackjack.BlackjackHand;
 import com.micatechnologies.minecraft.lbe.casino.blackjack.BlackjackMath;
+import com.micatechnologies.minecraft.lbe.casino.race.PigRace;
+import com.micatechnologies.minecraft.lbe.casino.wheel.BigWheel;
 import com.micatechnologies.minecraft.lbe.casino.cards.Card;
 import com.micatechnologies.minecraft.lbe.casino.coinflip.CoinFlipGame;
 import com.micatechnologies.minecraft.lbe.casino.highlow.HighLowGame;
@@ -371,6 +373,19 @@ public class GuiCasinoMachine extends GuiScreen {
                 options.add(new Option("Quick pick", 0, 0));
                 options.add(new Option("Clear", 1, 0));
                 break;
+            case BIG_WHEEL:
+                for (BigWheel.Segment segment : BigWheel.Segment.values()) {
+                    if (segment.isBettable()) {
+                        options.add(new Option(segment.label(), segment.ordinal(), 0));
+                    }
+                }
+                break;
+            case PIG_RACE:
+                for (PigRace.Pig pig : PigRace.Pig.values()) {
+                    options.add(new Option(pig.displayName() + " "
+                        + money(pig.returnMultiplier()) + "x", pig.ordinal(), 0));
+                }
+                break;
             case BLACKJACK:
                 // Only what is legal right now, worked out from what the server sent. The server
                 // checks again; this just keeps illegal buttons off the screen.
@@ -428,6 +443,12 @@ public class GuiCasinoMachine extends GuiScreen {
                 return;
             case SETTLED:
             default:
+                if (game.isSharedRound() && !animating) {
+                    // The round was decided by the table, not by a click here: its show starts
+                    // now, in step with the wheel or race in the world.
+                    animating = true;
+                    animationTicks = 0;
+                }
                 pending = message;
                 // The balance is deliberately held back until the reveal finishes — applying it now
                 // would show the player the outcome up to two seconds before the animation does.
@@ -556,6 +577,13 @@ public class GuiCasinoMachine extends GuiScreen {
             status = "Pick some numbers first.";
             return;
         }
+        if (game.isSharedRound()) {
+            // A bet joins the table's round; nothing is decided now, so nothing animates. The
+            // server answers with the bet and the time left to bet.
+            status = "";
+            sendPlay(bet);
+            return;
+        }
         pending = null;
         settled = null;
         heldMask = 0;
@@ -621,7 +649,9 @@ public class GuiCasinoMachine extends GuiScreen {
             sounds.roundStarted();
         }
         sounds.animationTick(animationTicks);
-        if (animationTicks >= ANIMATION_TICKS && pending != null) {
+        int revealTicks = game.isSharedRound() ? CasinoFanfare.SHARED_REVEAL_TICKS
+            : ANIMATION_TICKS;
+        if (animationTicks >= revealTicks && pending != null) {
             settle();
         } else if (animationTicks > GIVE_UP_TICKS) {
             // The server never answered — a refused bet, a dropped packet, a disconnect. Stop
@@ -715,6 +745,17 @@ public class GuiCasinoMachine extends GuiScreen {
                 break;
             case BLACKJACK:
                 drawBlackjack(centre, top);
+                break;
+            case BIG_WHEEL:
+                drawBigText(centre, top + 12, animating ? String.valueOf(cosmetic.nextInt(48))
+                    : settled == null || settled.stage() != PacketCasinoResult.Stage.SETTLED ? "—"
+                    : BigWheel.segmentAt(settled.reveal(0, 0)).label());
+                break;
+            case PIG_RACE:
+                drawBigText(centre, top + 12, animating ? "..."
+                    : settled == null || settled.stage() != PacketCasinoResult.Stage.SETTLED ? "—"
+                    : PigRace.Pig.values()[Math.floorMod(settled.reveal(0, 0),
+                        PigRace.Pig.values().length)].displayName());
                 break;
             case ROULETTE:
                 drawRoulette(centre, top);
@@ -1103,6 +1144,12 @@ public class GuiCasinoMachine extends GuiScreen {
                 // The only game here whose return depends on how well it is played, so stating one
                 // number would be a lie in either direction.
                 return "Returns up to 99.5% — with perfect play";
+            case BIG_WHEEL:
+                rtp = BigWheel.returnToPlayer(BigWheel.Segment.ONE);
+                break;
+            case PIG_RACE:
+                rtp = PigRace.RETURN;
+                break;
             case BLACKJACK:
                 // Like video poker: the figure is for perfect play, and says so.
                 return String.format(Locale.ROOT, "Returns up to %.1f%% — with perfect play",
