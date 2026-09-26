@@ -259,6 +259,18 @@ def main():
             write_png(os.path.join(OUT_DIR, face_name + ".png"), rows)
             written += 1
         print("wrote", name, "(%s)" % ("tall" if tall else "table"))
+
+    # The leaderboard: a dark board in a gold frame. Its lines are drawn by the renderer, so the
+    # face is deliberately plain.
+    board = grid((0x16, 0x12, 0x20))
+    frame(board, GOLD)
+    box(board, 1, 1, 14, 1, GOLD_LIT)
+    board_side = grid(GOLD)
+    box(board_side, 0, 0, 15, 0, GOLD_LIT)
+    write_png(os.path.join(OUT_DIR, "casino_leaderboard_front.png"), board)
+    write_png(os.path.join(OUT_DIR, "casino_leaderboard_side.png"), board_side)
+    written += 2
+    print("wrote casino_leaderboard")
     print("%d textures written" % written)
 
 

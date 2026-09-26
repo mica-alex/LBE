@@ -32,6 +32,9 @@ public class LbeClientProxy extends LbeCommonProxy {
         net.minecraftforge.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
             com.micatechnologies.minecraft.lbe.casino.block.TileEntityCasinoMachine.class,
             new com.micatechnologies.minecraft.lbe.client.render.TileEntityCasinoMachineRenderer());
+        net.minecraftforge.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
+            com.micatechnologies.minecraft.lbe.casino.block.TileEntityCasinoLeaderboard.class,
+            new com.micatechnologies.minecraft.lbe.client.render.TileEntityCasinoLeaderboardRenderer());
         // ModelRegistryEvent arrives on the Forge bus in 1.12.2; subscribe this proxy so
         // registerModels below is reached.
         MinecraftForge.EVENT_BUS.register(this);
@@ -98,6 +101,7 @@ public class LbeClientProxy extends LbeCommonProxy {
                     .values()) {
             bindModel(machine);
         }
+        bindModel(com.micatechnologies.minecraft.lbe.casino.block.CasinoBlocks.leaderboardItem());
     }
 
     private static void bindModel(Item item) {

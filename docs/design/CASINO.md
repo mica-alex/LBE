@@ -203,6 +203,13 @@ time, which is the most expensive thing a block can ask for.
 drops, a lit tile wanders the mines board, keno flashes PLAY. The last round stays up for thirty
 seconds before this starts.
 
+**The ledger and the leaderboard.** Every settled round is added to a per-player, per-game ledger
+(`casino/stats/CasinoLedger`, pure; saved as `data/lbe_casino_stats.dat` by `CasinoStatsData`). It
+records money that has already moved, and nothing that decides a game reads it. A big win joins
+the public "recent big wins" list at the reveal, not at settlement, so a leaderboard cannot spoil a
+spin. Only players who are ahead are ever listed as winners, and `leaderboardShowsNames` can hide
+names. The leaderboard block and `/casino top` show exactly the same view.
+
 **Dye is the one thing a machine saves.** Right-clicking with dye sets a neon trim, which is stored
 in the tile entity's NBT because it is decoration somebody chose, not game state.
 

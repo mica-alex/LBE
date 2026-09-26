@@ -57,12 +57,15 @@ public final class CasinoEffects {
      * @param delayTicks how long until their screen shows the result; 0 when it already has
      * @param announcement the chat line for the whole server, or {@code null} for none
      * @param advancements casino advancements the round earned, granted at the reveal
+     * @param atReveal anything else to do at the reveal, such as posting a big win to the
+     *     leaderboard, or {@code null}
      */
     public static void roundSettled(WorldServer world, BlockPos pos, boolean tall,
                                     EntityPlayer player, CasinoFanfare fanfare, int delayTicks,
                                     @Nullable ITextComponent announcement,
-                                    List<String> advancements) {
-        if (!fanfare.isHeardByBystanders() && announcement == null && advancements.isEmpty()) {
+                                    List<String> advancements, @Nullable Runnable atReveal) {
+        if (!fanfare.isHeardByBystanders() && announcement == null && advancements.isEmpty()
+                && atReveal == null) {
             return;
         }
         if (PENDING.size() >= MAX_PENDING) {
@@ -70,7 +73,7 @@ public final class CasinoEffects {
         }
         PENDING.add(new Pending(world, pos, tall, player.getUniqueID(), fanfare,
             world.getTotalWorldTime() + Math.max(0, delayTicks), announcement,
-            new ArrayList<>(advancements)));
+            new ArrayList<>(advancements), atReveal));
     }
 
     /** Drops everything queued. Called when the server stops. */
@@ -117,6 +120,9 @@ public final class CasinoEffects {
                 CasinoAdvancements.grant((net.minecraft.entity.player.EntityPlayerMP) player,
                     advancement, "earned");
             }
+        }
+        if (pending.atReveal != null) {
+            pending.atReveal.run();
         }
         if (pending.fanfare == CasinoFanfare.JACKPOT
                 && com.micatechnologies.minecraft.lbe.LbeConfig.jackpotLootBox
@@ -209,9 +215,12 @@ public final class CasinoEffects {
         @Nullable
         final ITextComponent announcement;
         final List<String> advancements;
+        @Nullable
+        final Runnable atReveal;
 
         Pending(WorldServer world, BlockPos pos, boolean tall, UUID playerId, CasinoFanfare fanfare,
-                long dueTick, @Nullable ITextComponent announcement, List<String> advancements) {
+                long dueTick, @Nullable ITextComponent announcement, List<String> advancements,
+                @Nullable Runnable atReveal) {
             this.world = world;
             this.pos = pos;
             this.tall = tall;
@@ -220,6 +229,7 @@ public final class CasinoEffects {
             this.dueTick = dueTick;
             this.announcement = announcement;
             this.advancements = advancements;
+            this.atReveal = atReveal;
         }
     }
 }

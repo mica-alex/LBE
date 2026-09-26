@@ -90,6 +90,9 @@ public final class LbeConfig {
     /** Whether a jackpot also drops a legendary loot box at the machine. */
     public static boolean jackpotLootBox = true;
 
+    /** Whether leaderboards and /casino top show players' names, or just "A player". */
+    public static boolean leaderboardShowsNames = true;
+
     // --- general ----------------------------------------------------------------------------------
 
     /** Master switch for natural loot-box generation. Off still leaves the boxes placeable by hand. */
@@ -685,6 +688,10 @@ public final class LbeConfig {
         jackpotLootBox = config.getBoolean("jackpotLootBox", CATEGORY_CASINO, jackpotLootBox,
             "Whether a jackpot also drops a legendary loot box at the machine. The box is items, "
                 + "not money, so no game's return changes; it only makes the rarest moment rarer.");
+        leaderboardShowsNames = config.getBoolean("leaderboardShowsNames", CATEGORY_CASINO,
+            leaderboardShowsNames,
+            "Whether leaderboard blocks and /casino top name the players on them. Off shows the "
+                + "amounts as 'A player'. Only players who are ahead are ever listed as winners.");
 
         if (config.hasChanged()) {
             config.save();

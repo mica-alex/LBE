@@ -93,6 +93,9 @@ public class Lbe {
         // what decides which game it runs.
         GameRegistry.registerTileEntity(TileEntityCasinoMachine.class,
             new ResourceLocation(LbeConstants.MOD_NAMESPACE, "casino_machine"));
+        GameRegistry.registerTileEntity(
+            com.micatechnologies.minecraft.lbe.casino.block.TileEntityCasinoLeaderboard.class,
+            new ResourceLocation(LbeConstants.MOD_NAMESPACE, "casino_leaderboard"));
         LbeTab.initTabElements();
         // Weight 0 is the middle of the road: LBE has no opinion about running before or after any
         // other generator, because it only ever writes into air that is already there.
@@ -126,6 +129,7 @@ public class Lbe {
     @EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
         event.registerServerCommand(new CommandLbe());
+        event.registerServerCommand(new com.micatechnologies.minecraft.lbe.command.CommandCasino());
         // Must be here and not earlier: SUM decides which economy backend it is using as the server
         // starts, so asking during preInit is asking before there is an answer.
         LbeEconomy.onServerStarting();

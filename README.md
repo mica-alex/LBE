@@ -107,6 +107,14 @@ its value, including whether the dearest-ingredient floor applied, so you can se
 item where it is before deciding whether you need a weight change, a declared material value, or just
 an override. (Usually the third.)
 
+`/lbe` is for operators. Players get `/casino`:
+
+```
+/casino stats           your own record: rounds, stakes and net, per game and overall
+/casino stats <player>  someone else's record (operators only)
+/casino top             the biggest winners and recent big wins, as a leaderboard shows them
+```
+
 ## Building
 
 Requires a **JDK 17–22** (`21` is the sweet spot — see `CLAUDE.md`). The mod itself targets Java 8 via

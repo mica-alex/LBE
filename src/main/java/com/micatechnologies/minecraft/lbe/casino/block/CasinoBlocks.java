@@ -33,6 +33,10 @@ public final class CasinoBlocks {
     private static final Map<CasinoGame, ItemBlock> MACHINE_ITEMS =
         new EnumMap<>(CasinoGame.class);
 
+    /** The wall-mounted leaderboard, and its item. */
+    private static BlockCasinoLeaderboard leaderboard;
+    private static ItemBlock leaderboardItem;
+
     private CasinoBlocks() {
         throw new AssertionError("No instances.");
     }
@@ -43,6 +47,13 @@ public final class CasinoBlocks {
             MACHINES.put(game, block);
             MACHINE_ITEMS.put(game, registerItemBlock(block));
         }
+        leaderboard = LbeRegistry.addBlock(new BlockCasinoLeaderboard());
+        leaderboardItem = registerItemBlock(leaderboard);
+    }
+
+    /** The leaderboard's item form. Null before {@link #init()}. */
+    public static ItemBlock leaderboardItem() {
+        return leaderboardItem;
     }
 
     /** The machine for a game. Null before {@link #init()}. */

@@ -16,6 +16,7 @@ import com.micatechnologies.minecraft.lbe.casino.mines.MinesGame;
 import com.micatechnologies.minecraft.lbe.casino.plinko.PlinkoGame;
 import com.micatechnologies.minecraft.lbe.casino.roulette.RouletteGame;
 import com.micatechnologies.minecraft.lbe.casino.slots.SlotSpin;
+import com.micatechnologies.minecraft.lbe.casino.stats.CasinoLedger;
 import com.micatechnologies.minecraft.lbe.casino.videopoker.VideoPokerGame;
 import com.micatechnologies.minecraft.lbe.casino.war.WarGame;
 import com.micatechnologies.minecraft.lbe.network.LbeNetwork;
@@ -280,8 +281,18 @@ public class TileEntityCasinoMachine extends TileEntity {
         }
         ITextComponent announcement = LbeConfig.announceJackpots && fanfare == CasinoFanfare.JACKPOT
             ? announcement(player, game, totalReturn) : null;
+        // The ledger records money that has already moved, so totals are written now. A big win
+        // only reaches the public board at the reveal, like everything else the floor notices.
+        CasinoStatsData stats = CasinoStatsData.get(world);
+        stats.record(player.getUniqueID(), player.getName(), game.registryName(), bet, totalReturn);
+        Runnable atReveal = null;
+        if (fanfare == CasinoFanfare.BIG_WIN || fanfare == CasinoFanfare.JACKPOT) {
+            CasinoLedger.BigWin win = new CasinoLedger.BigWin(player.getName(),
+                game.displayName(), totalReturn, System.currentTimeMillis());
+            atReveal = () -> stats.bigWin(win);
+        }
         CasinoEffects.roundSettled((WorldServer) world, pos, game.isTall(), player, fanfare,
-            revealTicks, announcement, earned);
+            revealTicks, announcement, earned, atReveal);
     }
 
     // ---------------------------------------------------------------------------------------------
