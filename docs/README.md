@@ -4,6 +4,8 @@
 | --- | --- |
 | [`design/RARITY_MODEL.md`](design/RARITY_MODEL.md) | How an item's tier is worked out: the scoring formula, every coefficient, the percentile cuts, and what the model cannot see |
 | [`design/LOOT_BOXES.md`](design/LOOT_BOXES.md) | The boxes themselves: the block, the seed, world generation, what comes out when you open one |
+| [`design/CASINO.md`](design/CASINO.md) | The casino: the SUM seam, how a game takes a bet, the house edge, the games, presentation, player protections |
+| [`UNFINISHED_ITEMS.md`](UNFINISHED_ITEMS.md) | Open items: what is deferred, what has not been played in game, and when to come back to each |
 | [`AGENT-PLANS/`](AGENT-PLANS/) | **Gitignored.** Phased implementation plan and agent working notes |
 
 ## Conventions used across these docs

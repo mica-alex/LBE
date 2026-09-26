@@ -178,6 +178,10 @@ hears the win from the server, at the machine, with the player excluded so nothi
 shared constant rather than config because config is never synced, and a server-side threshold
 could not reach the screen that plays the player's sting.
 
+Every sound is a vanilla `SoundEvent` at a chosen pitch and volume. Custom audio is a separate
+decision: 1.12 wants Ogg Vorbis, which the repo's stdlib-only generators cannot produce, so it
+means an external encoder or licensed audio.
+
 **Display state is a one-way copy.** When a round settles, the machine's tile entity keeps its
 reveal and fanfare and sends them to every client watching the chunk, and
 `TileEntityCasinoMachineRenderer` draws them: reels on a slot machine, the wheel on a roulette
@@ -304,10 +308,15 @@ Verified by play, not only by test:
 - the two-step games (high-low, video poker) and the open-ended one (mines) all settle their stake
   exactly once despite taking it several packets earlier.
 
-**Still unverified, and the reason this is not a 1.0:** every one of those runs was against SUM's
-*local* backend. Nothing here has ever talked to a remote OMCE economy, which is the claim SUM's own
-plan flags as the one most likely to be quietly false. Until that happens, a release is a
-pre-release.
+Those runs were against SUM's *local* backend. The casino has since run against a **remote OMCE
+economy** on the Paddington's Dream server, which was the claim SUM's own plan flagged as the one
+most likely to be quietly false, and the reason releases stayed pre-releases until 2026-09-26.
+
+The casino floor that followed (displays, sounds, the ledger and leaderboard, the progressive
+jackpot, the vendor, decor, blackjack, craps, the big wheel, the pig race, comps, limits and
+exclusion) was **played through in a dev client on 2026-09-26**, and the fixes that pass found are
+in. A few paths were not reached in that pass; they are listed in
+[`../UNFINISHED_ITEMS.md`](../UNFINISHED_ITEMS.md).
 
 ## Deliberately not ported
 
@@ -322,7 +331,17 @@ screen. The machines here are things you walk up to and play; a scratch card is 
 take away, and LBE already has loot boxes for that.
 
 **Video poker's double-or-nothing.** Deferred rather than excluded. It stakes a payout that has
-already settled, which `Wager` cannot express — that is a wager-model change, not a game.
+already settled, which a single `Wager` cannot express. `WagerSet` now exists and may be enough;
+see [`../UNFINISHED_ITEMS.md`](../UNFINISHED_ITEMS.md).
+
+**Physical chips.** Rejected. A second currency held as items is a duplication target for every
+other mod's bugs, and SUM's wallet already does the job.
+
+**Player-owned machines that bank the edge.** Rejected. The owner would have to back the payouts,
+and a bankroll running dry in the middle of a win is a failure with no good answer.
+
+**Racing real mobs.** Rejected in favour of the race board: no entities, no pathfinding, nothing
+to grief. The pig race is drawn, not run.
 
 ## Looking after players: comps, loss limits, self-exclusion
 
@@ -380,8 +399,9 @@ checks it lands on the figure. Mid-round the client is sent only the dealer's up
 Two things to settle before the multiplayer tables:
 
 - **A pot is several wagers resolved together.** SUM's escrow models it well — several tickets
-  released to one winner — but `Wager` is one stake with one outcome. It wants a sibling type, not
-  a hack.
+  released to one winner. `WagerSet` (above) already holds several stakes and settles each once,
+  but always back to the player who staked it; a pot needs releasing to *another* player, which is
+  the new part.
 - **A table mid-hand has state that must survive a restart.** Every machine here is deliberately
   stateless except the games that take the stake up front — high-low's dealt card, video poker's
   hand, mines' board, a blackjack or craps round — whose state is held in memory. Closing the
