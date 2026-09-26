@@ -277,6 +277,11 @@ class HouseEdgeTest {
                     com.micatechnologies.minecraft.lbe.casino.wheel.BigWheel.returnToPlayer(segment));
             }
         }
+        for (com.micatechnologies.minecraft.lbe.casino.craps.CrapsGame.Bet bet
+                : com.micatechnologies.minecraft.lbe.casino.craps.CrapsGame.Bet.values()) {
+            assertInBand("craps " + bet.label(),
+                com.micatechnologies.minecraft.lbe.casino.craps.CrapsGame.returnToPlayer(bet));
+        }
         for (com.micatechnologies.minecraft.lbe.casino.race.PigRace.Pig pig
                 : com.micatechnologies.minecraft.lbe.casino.race.PigRace.Pig.values()) {
             assertInBand("pig race " + pig.displayName(),

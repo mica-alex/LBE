@@ -61,6 +61,13 @@ final class CasinoSounds {
                     play(SoundEvents.BLOCK_NOTE_HAT, 0.15F, 1.8F);
                 }
                 break;
+            case CRAPS:
+                // Dice rattling in a hand, then tumbling down the table.
+                if (tick % 3 == 0) {
+                    play(SoundEvents.BLOCK_STONE_BUTTON_CLICK_ON, 0.35F,
+                        1.6F + cosmetic.nextFloat() * 0.3F);
+                }
+                break;
             case BIG_WHEEL:
                 // The clapper on the pegs: fast, then slowing over the longer shared reveal.
                 if (tick >= nextRouletteClick) {

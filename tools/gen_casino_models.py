@@ -46,6 +46,7 @@ MACHINES = {
     "blackjack_table": False,
     "big_wheel": True,
     "pig_race": True,
+    "craps_table": False,
 }
 
 # How far the upper body's screen face sits behind the front edge of the block, in 16ths. The

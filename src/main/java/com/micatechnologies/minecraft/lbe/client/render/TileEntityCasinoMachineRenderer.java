@@ -230,8 +230,66 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
             case BLACKJACK:
                 drawBlackjack(round);
                 break;
+            case CRAPS:
+                drawCraps(round);
+                break;
             default:
                 break;
+        }
+    }
+
+    /** Two dice on the felt, tumbling while the round animates, and the point puck once set. */
+    private void drawCraps(Round round) {
+        boolean settled = round.settled();
+        for (int d = 0; d < 2; d++) {
+            int face;
+            if (round.revealing || !round.played()) {
+                face = 1 + (int) ((round.time / 3.0D + d * 2.0D) % 6.0D);
+            } else {
+                face = Math.max(1, Math.min(6, round.value(d, 1)));
+            }
+            float cx = d == 0 ? -9.0F : 9.0F;
+            float cy = round.revealing ? (float) Math.sin(round.time * 0.8D + d) * 2.0F : 0.0F;
+            die(cx, cy, face);
+        }
+        int point = settled ? round.value(2, 0) : 0;
+        if (point > 0) {
+            rect(18.0F, -24.0F, 30.0F, -12.0F, 0xFF101010, Z_MID);
+            text("ON " + point, 24.0F, -21.0F, 0xFFFFFF, 0.45F);
+        }
+    }
+
+    /** A die: a white square with its pips. */
+    private static void die(float cx, float cy, int face) {
+        rect(cx - 6.5F, cy - 6.5F, cx + 6.5F, cy + 6.5F, 0xFF303030, Z_MID);
+        rect(cx - 6.0F, cy - 6.0F, cx + 6.0F, cy + 6.0F, 0xFFF4F0E6, Z_MID + 0.1F);
+        boolean[] pips = new boolean[9];   // a 3x3 grid, row by row
+        switch (face) {
+            case 1:
+                pips[4] = true;
+                break;
+            case 2:
+                pips[0] = pips[8] = true;
+                break;
+            case 3:
+                pips[0] = pips[4] = pips[8] = true;
+                break;
+            case 4:
+                pips[0] = pips[2] = pips[6] = pips[8] = true;
+                break;
+            case 5:
+                pips[0] = pips[2] = pips[4] = pips[6] = pips[8] = true;
+                break;
+            default:
+                pips[0] = pips[2] = pips[3] = pips[5] = pips[6] = pips[8] = true;
+                break;
+        }
+        for (int i = 0; i < 9; i++) {
+            if (pips[i]) {
+                float px = cx + (i % 3 - 1) * 3.8F;
+                float py = cy + (i / 3 - 1) * 3.8F;
+                rect(px - 1.1F, py - 1.1F, px + 1.1F, py + 1.1F, 0xFF101010, Z_MID + 0.2F);
+            }
         }
     }
 

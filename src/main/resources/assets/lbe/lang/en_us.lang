@@ -38,6 +38,7 @@ tile.lbe.mines_machine.name=Mines Machine
 tile.lbe.blackjack_table.name=Blackjack Table
 tile.lbe.big_wheel.name=Big Wheel
 tile.lbe.pig_race.name=Pig Race
+tile.lbe.craps_table.name=Craps Table
 lbe.casino.title=Lucky Bucks
 lbe.casino.spin=Spin
 lbe.casino.spinning=Spinning...

@@ -10,6 +10,7 @@ import com.micatechnologies.minecraft.lbe.casino.blackjack.BlackjackGame;
 import com.micatechnologies.minecraft.lbe.casino.blackjack.BlackjackHand;
 import com.micatechnologies.minecraft.lbe.casino.cards.Card;
 import com.micatechnologies.minecraft.lbe.casino.coinflip.CoinFlipGame;
+import com.micatechnologies.minecraft.lbe.casino.craps.CrapsGame;
 import com.micatechnologies.minecraft.lbe.casino.economy.LbeEconomy;
 import com.micatechnologies.minecraft.lbe.casino.economy.Wager;
 import com.micatechnologies.minecraft.lbe.casino.economy.WagerSet;
@@ -136,6 +137,8 @@ public class TileEntityCasinoMachine extends TileEntity {
         @Nullable final MinesGame mines;
         @Nullable final BlackjackGame blackjack;
         final Wager wager;
+        /** Craps only: a pass or don't-pass round waiting on its point. */
+        @Nullable CrapsGame craps;
         /** Blackjack only: every stake in the round, the base bet included. */
         @Nullable final WagerSet stakes;
         final double bet;
@@ -401,6 +404,9 @@ public class TileEntityCasinoMachine extends TileEntity {
             case MINES:
                 // Clamped by the game rather than refused, so a nonsense count still gives a board.
                 return null;
+            case CRAPS:
+                return CrapsGame.Bet.byCode(optionA) != null ? null
+                    : "Pass line, don't pass, or the field.";
             case BIG_WHEEL:
                 return com.micatechnologies.minecraft.lbe.casino.wheel.BigWheel.Segment
                     .bettable(optionA) != null ? null : "Back a segment on the wheel.";
@@ -503,6 +509,10 @@ public class TileEntityCasinoMachine extends TileEntity {
                     reveal[at++] = cardId(card);
                 }
                 return reveal;
+            }
+            case CRAPS: {
+                CrapsGame round = (CrapsGame) result;
+                return new int[] {round.die1(), round.die2(), round.point(), round.bet().ordinal()};
             }
             case KENO: {
                 KenoGame.Result ticket = (KenoGame.Result) result;
@@ -684,6 +694,19 @@ public class TileEntityCasinoMachine extends TileEntity {
     /** Step one: the stake is taken and the round begins. Nothing is decided yet. */
     private void deal(EntityPlayerMP player, CasinoGame game, int optionA, Wager wager,
                       double bet) {
+        if (game == CasinoGame.CRAPS) {
+            CrapsGame round = CrapsGame.start(CrapsGame.Bet.byCode(optionA), random);
+            if (round.isFinished()) {
+                settle(player, game, wager, round, bet, CasinoFanfare.REVEAL_TICKS);
+            } else {
+                OpenHand open = new OpenHand(game, null, null, null, wager, bet);
+                open.craps = round;
+                openHands.put(player.getUniqueID(), open);
+                LbeNetwork.CHANNEL.sendTo(PacketCasinoResult.dealt(game, balanceOf(player),
+                    revealFor(game, round), round.describe()), player);
+            }
+            return;
+        }
         if (game == CasinoGame.BLACKJACK) {
             BlackjackGame table = BlackjackGame.deal(random);
             WagerSet stakes = new WagerSet();
@@ -740,6 +763,19 @@ public class TileEntityCasinoMachine extends TileEntity {
         }
         if (open.kind == CasinoGame.BLACKJACK) {
             continueBlackjack(player, open, optionA);
+            return;
+        }
+        if (open.kind == CasinoGame.CRAPS && open.craps != null) {
+            open.craps.roll(random);
+            if (open.craps.isFinished()) {
+                settle(player, CasinoGame.CRAPS, open.wager, open.craps, open.bet,
+                    CasinoFanfare.REVEAL_TICKS);
+            } else {
+                openHands.put(player.getUniqueID(), open);
+                LbeNetwork.CHANNEL.sendTo(PacketCasinoResult.dealt(CasinoGame.CRAPS,
+                    balanceOf(player), revealFor(CasinoGame.CRAPS, open.craps),
+                    open.craps.describe()), player);
+            }
             return;
         }
         GameResult result;

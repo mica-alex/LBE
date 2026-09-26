@@ -27,7 +27,8 @@ public enum CasinoGame {
     MINES("mines_machine", "Mines", Cabinet.TALL),
     BLACKJACK("blackjack_table", "Blackjack", Cabinet.TABLE),
     BIG_WHEEL("big_wheel", "Big Wheel", Cabinet.TALL),
-    PIG_RACE("pig_race", "Pig Race", Cabinet.TALL);
+    PIG_RACE("pig_race", "Pig Race", Cabinet.TALL),
+    CRAPS("craps_table", "Craps", Cabinet.TABLE);
 
     /** What shape of block the game sits in. */
     public enum Cabinet {
@@ -75,7 +76,8 @@ public enum CasinoGame {
      * note on why that state is deliberately not written to disk.
      */
     public boolean takesStakeUpFront() {
-        return this == HIGH_LOW || this == VIDEO_POKER || this == MINES || this == BLACKJACK;
+        return this == HIGH_LOW || this == VIDEO_POKER || this == MINES || this == BLACKJACK
+            || this == CRAPS;
     }
 
     /**

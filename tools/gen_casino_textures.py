@@ -48,6 +48,7 @@ MACHINES = {
     "blackjack_table":  (False, (0x16, 0x56, 0x3C), (0x0E, 0x38, 0x27), "cards"),
     "big_wheel":        (True,  (0x5A, 0x1A, 0x22), (0x3C, 0x10, 0x16), "wheel"),
     "pig_race":         (True,  (0x2A, 0x4A, 0x1E), (0x1A, 0x32, 0x12), "arrows"),
+    "craps_table":      (False, (0x1A, 0x4E, 0x5A), (0x10, 0x34, 0x3C), "dice"),
 }
 
 
@@ -194,7 +195,16 @@ def motif_mine(rows):
     rows[7][8] = RED
 
 
+def motif_dice(rows):
+    """Two dice, a five and a two, side by side."""
+    box(rows, 3, 5, 7, 9, WHITE)
+    box(rows, 9, 6, 13, 10, WHITE)
+    for x, y in ((4, 6), (6, 6), (5, 7), (4, 8), (6, 8), (10, 7), (12, 9)):
+        rows[y][x] = BLACK
+
+
 MOTIFS = {
+    "dice": motif_dice,
     "mine": motif_mine,
     "poker": motif_poker,
     "baccarat": motif_baccarat,

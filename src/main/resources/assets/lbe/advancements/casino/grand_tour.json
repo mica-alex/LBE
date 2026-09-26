@@ -54,6 +54,9 @@
     },
     "pig_race": {
       "trigger": "minecraft:impossible"
+    },
+    "craps_table": {
+      "trigger": "minecraft:impossible"
     }
   },
   "requirements": [
@@ -95,6 +98,9 @@
     ],
     [
       "pig_race"
+    ],
+    [
+      "craps_table"
     ]
   ]
 }

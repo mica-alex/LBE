@@ -239,7 +239,7 @@ in the tile entity's NBT because it is decoration somebody chose, not game state
 
 ## The games
 
-Thirteen, all sharing one block class, one screen and one pair of packets. Adding
+Fourteen, all sharing one block class, one screen and one pair of packets. Adding
 another is: pure logic in its own package, a constant in `CasinoGame`, a branch in
 `TileEntityCasinoMachine.resolve`, a branch in `GuiCasinoMachine.drawReveal`, and a motif in
 `tools/gen_casino_textures.py`. Nothing that moves money is touched.
@@ -256,6 +256,7 @@ another is: pure logic in its own package, a constant in `CasinoGame`, a branch 
 | Baccarat | 98.6 / 98.9 / 85.6% | `baccarat_game.py` | no — the 5% banker commission is its edge |
 | Video poker | 70% naive → ~99.5% optimal | `video_poker_game.py` (9/6 Jacks or Better) | no |
 | Mines | 96% at every stopping point | `mines_game.py` | no |
+| Craps | pass 98.59%, don't pass 98.64%, field 97.22% | `craps_game.py` | subset: no odds bet (it has no edge) |
 | Big wheel | 96.0% on every segment | new | shared rounds; counts x payouts are 48 for every segment |
 | Pig race | 90.0% on every pig | new | shared rounds; fixed odds, not a pool |
 | Blackjack | 99.43% perfect play, less otherwise | `blackjack_game.py` | rules pinned: S17, 3:2, DAS, split once, infinite deck, no insurance/surrender |
@@ -374,7 +375,6 @@ checks it lands on the figure. Mid-round the client is sent only the dealer's up
 
 | Game | Bot source | What it needs first |
 |---|---|---|
-| Craps | `craps_game.py` | Many simultaneous bets across several rolls. `WagerSet` now covers the money side |
 | Xtreme Hold'em | `xtreme_holdem_game.py` | Player-vs-player. Needs a pot, and a table whose state survives a restart |
 
 Two things to settle before the multiplayer tables:

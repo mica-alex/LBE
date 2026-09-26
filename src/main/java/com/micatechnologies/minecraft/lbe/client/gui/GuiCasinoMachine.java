@@ -9,6 +9,7 @@ import com.micatechnologies.minecraft.lbe.casino.baccarat.BaccaratGame;
 import com.micatechnologies.minecraft.lbe.casino.blackjack.BlackjackGame;
 import com.micatechnologies.minecraft.lbe.casino.blackjack.BlackjackHand;
 import com.micatechnologies.minecraft.lbe.casino.blackjack.BlackjackMath;
+import com.micatechnologies.minecraft.lbe.casino.craps.CrapsGame;
 import com.micatechnologies.minecraft.lbe.casino.race.PigRace;
 import com.micatechnologies.minecraft.lbe.casino.wheel.BigWheel;
 import com.micatechnologies.minecraft.lbe.casino.cards.Card;
@@ -286,6 +287,8 @@ public class GuiCasinoMachine extends GuiScreen {
             case BLACKJACK:
                 // The dealer's row, then up to two hands of the player's.
                 return 64;
+            case CRAPS:
+                return 44;
             case MINES:
                 // Four rows of six, plus a little under them.
                 return (MinesGame.GRID_SIZE / 6) * 18 + 4;
@@ -372,6 +375,16 @@ public class GuiCasinoMachine extends GuiScreen {
             case KENO:
                 options.add(new Option("Quick pick", 0, 0));
                 options.add(new Option("Clear", 1, 0));
+                break;
+            case CRAPS:
+                if (awaitingChoice) {
+                    // The point is set: all that is left is to keep rolling.
+                    options.add(new Option("Roll", 0, 0));
+                } else {
+                    for (CrapsGame.Bet bet : CrapsGame.Bet.values()) {
+                        options.add(new Option(bet.label(), bet.ordinal(), 0));
+                    }
+                }
                 break;
             case BIG_WHEEL:
                 for (BigWheel.Segment segment : BigWheel.Segment.values()) {
@@ -746,6 +759,18 @@ public class GuiCasinoMachine extends GuiScreen {
             case BLACKJACK:
                 drawBlackjack(centre, top);
                 break;
+            case CRAPS: {
+                String dice = animating
+                    ? (1 + cosmetic.nextInt(6)) + "  " + (1 + cosmetic.nextInt(6))
+                    : settled == null || settled.stage() == PacketCasinoResult.Stage.BALANCE ? "—"
+                    : settled.reveal(0, 0) + "  " + settled.reveal(1, 0);
+                drawBigText(centre, top + 8, dice);
+                int point = settled == null ? 0 : settled.reveal(2, 0);
+                if (point > 0 && !animating) {
+                    drawCenteredString(fontRenderer, "POINT " + point, centre, top + 32, 0xFFD54F);
+                }
+                break;
+            }
             case BIG_WHEEL:
                 drawBigText(centre, top + 12, animating ? String.valueOf(cosmetic.nextInt(48))
                     : settled == null || settled.stage() != PacketCasinoResult.Stage.SETTLED ? "—"
@@ -1144,6 +1169,12 @@ public class GuiCasinoMachine extends GuiScreen {
                 // The only game here whose return depends on how well it is played, so stating one
                 // number would be a lie in either direction.
                 return "Returns up to 99.5% — with perfect play";
+            case CRAPS: {
+                CrapsGame.Bet bet = CrapsGame.Bet.byCode(options.isEmpty() || awaitingChoice ? 0
+                    : options.get(Math.min(selectedOption, options.size() - 1)).valueA);
+                rtp = CrapsGame.returnToPlayer(bet == null ? CrapsGame.Bet.PASS : bet);
+                break;
+            }
             case BIG_WHEEL:
                 rtp = BigWheel.returnToPlayer(BigWheel.Segment.ONE);
                 break;
