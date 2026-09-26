@@ -2,6 +2,7 @@ package com.micatechnologies.minecraft.lbe.client.gui;
 
 import com.micatechnologies.minecraft.lbe.LbeConfig;
 import com.micatechnologies.minecraft.lbe.LbeConstants;
+import com.micatechnologies.minecraft.lbe.casino.CasinoFanfare;
 import com.micatechnologies.minecraft.lbe.casino.CasinoGame;
 import com.micatechnologies.minecraft.lbe.casino.block.TileEntityCasinoMachine;
 import com.micatechnologies.minecraft.lbe.casino.baccarat.BaccaratGame;
@@ -68,10 +69,13 @@ public class GuiCasinoMachine extends GuiScreen {
     private static final int CHROME_HEIGHT = 118;
 
     /** Ticks each slot reel keeps spinning. Staggered, so they land 1-2-3. */
-    private static final int[] REEL_STOP_TICKS = {24, 34, 44};
+    private static final int[] REEL_STOP_TICKS = CasinoFanfare.REEL_STOP_TICKS;
 
-    /** How long any game's reveal animation runs before it must settle. */
-    private static final int ANIMATION_TICKS = 44;
+    /**
+     * How long any game's reveal animation runs before it must settle. Shared with the server,
+     * which holds back what other players hear until this has run out.
+     */
+    private static final int ANIMATION_TICKS = CasinoFanfare.REVEAL_TICKS;
 
     /** After this long with no answer, stop animating: the bet was refused or the packet was lost. */
     private static final int GIVE_UP_TICKS = 200;
@@ -84,6 +88,7 @@ public class GuiCasinoMachine extends GuiScreen {
     private final BlockPos pos;
     private final CasinoGame game;
     private final Random cosmetic = new Random();
+    private final CasinoSounds sounds;
 
     private double bet;
     private double balance = PacketCasinoResult.UNKNOWN_BALANCE;
@@ -154,6 +159,7 @@ public class GuiCasinoMachine extends GuiScreen {
 
     public GuiCasinoMachine(BlockPos pos, CasinoGame game) {
         this.pos = pos;
+        this.sounds = new CasinoSounds(pos, game);
         this.game = game;
         this.bet = LbeConfig.minimumBet;
     }
@@ -396,6 +402,7 @@ public class GuiCasinoMachine extends GuiScreen {
                         revealedTiles.add(tile);
                     }
                 }
+                sounds.dealt(revealedTiles.size());
                 initGui();
                 return;
             case SETTLED:
@@ -589,6 +596,10 @@ public class GuiCasinoMachine extends GuiScreen {
             return;
         }
         animationTicks++;
+        if (animationTicks == 1) {
+            sounds.roundStarted();
+        }
+        sounds.animationTick(animationTicks);
         if (animationTicks >= ANIMATION_TICKS && pending != null) {
             settle();
         } else if (animationTicks > GIVE_UP_TICKS) {
@@ -608,6 +619,7 @@ public class GuiCasinoMachine extends GuiScreen {
         }
         settled = pending;
         status = pending.message();
+        sounds.settled(settled);
         pending = null;
         animating = false;
         // Now, with the reveal. The money moved seconds ago; this is when the player learns of it.

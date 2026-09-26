@@ -3,6 +3,7 @@ package com.micatechnologies.minecraft.lbe;
 import com.micatechnologies.minecraft.lbe.block.LbeBlocks;
 import com.micatechnologies.minecraft.lbe.block.TileEntityLootBox;
 import com.micatechnologies.minecraft.lbe.casino.block.CasinoBlocks;
+import com.micatechnologies.minecraft.lbe.casino.block.CasinoEffects;
 import com.micatechnologies.minecraft.lbe.casino.block.TileEntityCasinoMachine;
 import com.micatechnologies.minecraft.lbe.casino.economy.LbeEconomy;
 import com.micatechnologies.minecraft.lbe.catalog.LootCatalog;
@@ -82,6 +83,7 @@ public class Lbe {
         LbeConfig.init(event.getSuggestedConfigurationFile());
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new LootTableInjector());
+        MinecraftForge.EVENT_BUS.register(new CasinoEffects());
         com.micatechnologies.minecraft.lbe.network.LbeNetwork.init();
         LbeBlocks.init();
         CasinoBlocks.init();
@@ -143,5 +145,7 @@ public class Lbe {
         // Otherwise a single-player client carries the first world's economy handle into the next
         // world it opens, which is a different save with a different set of balances.
         LbeEconomy.onServerStopped();
+        // Cosmetic effects still waiting for a reveal belong to the world that just closed.
+        CasinoEffects.clear();
     }
 }

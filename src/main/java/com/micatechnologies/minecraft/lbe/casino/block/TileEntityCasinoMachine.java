@@ -2,6 +2,7 @@ package com.micatechnologies.minecraft.lbe.casino.block;
 
 import com.micatechnologies.minecraft.lbe.Lbe;
 import com.micatechnologies.minecraft.lbe.LbeConfig;
+import com.micatechnologies.minecraft.lbe.casino.CasinoFanfare;
 import com.micatechnologies.minecraft.lbe.casino.CasinoGame;
 import com.micatechnologies.minecraft.lbe.casino.GameResult;
 import com.micatechnologies.minecraft.lbe.casino.baccarat.BaccaratGame;
@@ -30,9 +31,11 @@ import javax.annotation.Nullable;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.Style;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextFormatting;
+import net.minecraft.world.WorldServer;
 
 /**
  * One casino machine of any kind. Holds no money and remembers nothing across a restart.
@@ -192,12 +195,17 @@ public class TileEntityCasinoMachine extends TileEntity {
             reject(player, "The machine jammed. Your bet has been returned.");
             return;
         }
-        settle(player, game, wager, result, rounded);
+        settle(player, game, wager, result, rounded, CasinoFanfare.REVEAL_TICKS);
     }
 
-    /** Settles a finished game and reports it. */
+    /**
+     * Settles a finished game and reports it.
+     *
+     * @param revealTicks how long the player's screen animates before showing this result, which is
+     *     how long everything the rest of the floor notices has to wait. See {@link CasinoEffects}.
+     */
     private void settle(EntityPlayerMP player, CasinoGame game, Wager wager, GameResult result,
-                        double bet) {
+                        double bet, int revealTicks) {
         double totalReturn = round(bet * result.totalReturnMultiplier());
         boolean settled = totalReturn > 0.0 ? wager.payOut(totalReturn) : wager.loseToHouse();
         if (!settled) {
@@ -208,9 +216,11 @@ public class TileEntityCasinoMachine extends TileEntity {
         LbeNetwork.CHANNEL.sendTo(new PacketCasinoResult(game, result.totalReturnMultiplier(),
             totalReturn, balanceOf(player), revealFor(game, result), result.describe()), player);
 
-        if (LbeConfig.announceJackpots && isJackpot(result)) {
-            announce(player, game, totalReturn);
-        }
+        CasinoFanfare fanfare = fanfareOf(result);
+        ITextComponent announcement = LbeConfig.announceJackpots && fanfare == CasinoFanfare.JACKPOT
+            ? announcement(player, game, totalReturn) : null;
+        CasinoEffects.roundSettled((WorldServer) world, pos, player, fanfare, revealTicks,
+            announcement);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -355,13 +365,10 @@ public class TileEntityCasinoMachine extends TileEntity {
         }
     }
 
-    /** Whether an outcome is worth telling the whole server about. */
-    private static boolean isJackpot(GameResult result) {
-        if (result instanceof SlotSpin) {
-            return ((SlotSpin) result).isJackpot();
-        }
-        // Everything else: a payout of 50x or more is rare enough to be an event.
-        return result.totalReturnMultiplier() >= 50.0;
+    /** How much of an event a finished round is. Slots names its own top prize; nothing else does. */
+    private static CasinoFanfare fanfareOf(GameResult result) {
+        boolean topPrize = result instanceof SlotSpin && ((SlotSpin) result).isJackpot();
+        return CasinoFanfare.of(result.totalReturnMultiplier(), topPrize);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -427,7 +434,7 @@ public class TileEntityCasinoMachine extends TileEntity {
         if (result == null) {
             return;   // already refunded and explained
         }
-        settle(player, open.kind, open.wager, result, open.bet);
+        settle(player, open.kind, open.wager, result, open.bet, CasinoFanfare.REVEAL_TICKS);
     }
 
     /**
@@ -459,7 +466,9 @@ public class TileEntityCasinoMachine extends TileEntity {
                     board.nextMultiplier())), player);
             return;
         }
-        settle(player, CasinoGame.MINES, open.wager, result, open.bet);
+        // Cashing out animates like any other result; turning a tile is shown the moment it lands.
+        int revealTicks = command == MINES_CASH_OUT ? CasinoFanfare.REVEAL_TICKS : 0;
+        settle(player, CasinoGame.MINES, open.wager, result, open.bet, revealTicks);
     }
 
     /**
@@ -611,11 +620,11 @@ public class TileEntityCasinoMachine extends TileEntity {
         }
     }
 
-    private void announce(EntityPlayerMP player, CasinoGame game, double payout) {
+    private static ITextComponent announcement(EntityPlayerMP player, CasinoGame game,
+                                               double payout) {
         String text = player.getName() + " won " + LbeEconomy.format(payout) + " at "
             + game.displayName() + "!";
-        player.getServer().getPlayerList().sendMessage(
-            new TextComponentString(text).setStyle(new Style().setColor(TextFormatting.GOLD)));
+        return new TextComponentString(text).setStyle(new Style().setColor(TextFormatting.GOLD));
     }
 
     /**
