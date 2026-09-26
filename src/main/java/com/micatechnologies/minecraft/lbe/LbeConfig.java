@@ -81,6 +81,9 @@ public final class LbeConfig {
     /** Whether a jackpot is announced to everyone on the server. */
     public static boolean announceJackpots = true;
 
+    /** Whether a jackpot announcement says where the machine is. */
+    public static boolean announceJackpotLocation = false;
+
     // --- general ----------------------------------------------------------------------------------
 
     /** Master switch for natural loot-box generation. Off still leaves the boxes placeable by hand. */
@@ -664,6 +667,11 @@ public final class LbeConfig {
         announceJackpots = config.getBoolean("announceJackpots", CATEGORY_CASINO, announceJackpots,
             "Whether the whole server hears about a jackpot. Jackpots are rare enough (about one "
                 + "in 14,000 spins) that this stays an event rather than noise.");
+        announceJackpotLocation = config.getBoolean("announceJackpotLocation", CATEGORY_CASINO,
+            announceJackpotLocation,
+            "Whether a jackpot announcement includes the machine's coordinates, so people can come "
+                + "and look. Off by default: on a server where a casino is somebody's private build, "
+                + "that is their address being read out to everyone.");
 
         if (config.hasChanged()) {
             config.save();

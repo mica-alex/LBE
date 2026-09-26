@@ -30,6 +30,9 @@ import java.util.UUID;
 import javax.annotation.Nullable;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.network.NetworkManager;
+import net.minecraft.network.play.server.SPacketUpdateTileEntity;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.Style;
@@ -71,6 +74,27 @@ public class TileEntityCasinoMachine extends TileEntity {
      * somebody with the source work out when to play.
      */
     private final Random random = new Random();
+
+    // ---------------------------------------------------------------------------------------------
+    // Display state — what the machine shows the room. Cosmetic, one-way, never saved.
+    //
+    // Set on the server when a round settles, sent to every client watching the chunk, and drawn by
+    // the machine's renderer. Nothing on the server ever reads it back: it is a copy of a result
+    // that has already been paid, for people who were not playing. Not written to NBT either — a
+    // restarted server has nothing to show until somebody plays, which is the truth.
+    // ---------------------------------------------------------------------------------------------
+
+    /** The last settled round's reveal, in the same encoding the player's screen was sent. */
+    private int[] display = new int[0];
+
+    /** The last round's {@link CasinoFanfare}, or -1 before anyone has played. */
+    private int displayFanfare = -1;
+
+    /** How long the last round animates before its result shows, in ticks. */
+    private int displayRevealTicks;
+
+    /** Client only: local world time the last round arrived, or -1 when it arrived pre-settled. */
+    private long displayArrivedAt = -1L;
 
     /**
      * A two-step game mid-deal, with the money already taken.
@@ -217,10 +241,11 @@ public class TileEntityCasinoMachine extends TileEntity {
             totalReturn, balanceOf(player), revealFor(game, result), result.describe()), player);
 
         CasinoFanfare fanfare = fanfareOf(result);
+        showRound(revealFor(game, result), fanfare, revealTicks);
         ITextComponent announcement = LbeConfig.announceJackpots && fanfare == CasinoFanfare.JACKPOT
             ? announcement(player, game, totalReturn) : null;
-        CasinoEffects.roundSettled((WorldServer) world, pos, player, fanfare, revealTicks,
-            announcement);
+        CasinoEffects.roundSettled((WorldServer) world, pos, game.isTall(), player, fanfare,
+            revealTicks, announcement);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -624,7 +649,104 @@ public class TileEntityCasinoMachine extends TileEntity {
                                                double payout) {
         String text = player.getName() + " won " + LbeEconomy.format(payout) + " at "
             + game.displayName() + "!";
+        if (LbeConfig.announceJackpotLocation) {
+            net.minecraft.util.math.BlockPos at = player.getPosition();
+            text += " (" + at.getX() + ", " + at.getY() + ", " + at.getZ() + ")";
+        }
         return new TextComponentString(text).setStyle(new Style().setColor(TextFormatting.GOLD));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Display state sync
+    // ---------------------------------------------------------------------------------------------
+
+    /** Server: records a settled round for the room to see, and sends it to whoever is watching. */
+    private void showRound(int[] reveal, CasinoFanfare fanfare, int revealTicks) {
+        display = reveal.clone();
+        displayFanfare = fanfare.ordinal();
+        displayRevealTicks = revealTicks;
+        if (world != null && !world.isRemote) {
+            net.minecraft.block.state.IBlockState state = world.getBlockState(pos);
+            // Flag 2: send to clients. The block itself has not changed, so no neighbour updates.
+            world.notifyBlockUpdate(pos, state, state, 2);
+        }
+    }
+
+    private NBTTagCompound writeDisplay(NBTTagCompound tag) {
+        tag.setIntArray("lbeShow", display);
+        tag.setByte("lbeFanfare", (byte) displayFanfare);
+        tag.setShort("lbeRevealTicks", (short) displayRevealTicks);
+        return tag;
+    }
+
+    /**
+     * Client: takes a display state from the server.
+     *
+     * @param live true for a round that has just been played, which animates; false for the state
+     *     sent with the chunk, which is shown as already settled
+     */
+    private void readDisplay(NBTTagCompound tag, boolean live) {
+        if (!tag.hasKey("lbeShow")) {
+            return;
+        }
+        int[] incoming = tag.getIntArray("lbeShow");
+        // Bounded like everything else a client is handed: a display never needs more than a
+        // baccarat coup or a keno draw, and a renderer walking a huge array every frame is a lag
+        // machine.
+        display = incoming.length <= 64 ? incoming : new int[0];
+        displayFanfare = tag.getByte("lbeFanfare");
+        displayRevealTicks = Math.max(0, tag.getShort("lbeRevealTicks"));
+        displayArrivedAt = live && world != null ? world.getTotalWorldTime() : -1L;
+    }
+
+    @Override
+    public NBTTagCompound getUpdateTag() {
+        return writeDisplay(super.getUpdateTag());
+    }
+
+    @Override
+    public void handleUpdateTag(NBTTagCompound tag) {
+        super.handleUpdateTag(tag);
+        readDisplay(tag, false);
+    }
+
+    @Nullable
+    @Override
+    public SPacketUpdateTileEntity getUpdatePacket() {
+        return new SPacketUpdateTileEntity(pos, 0, writeDisplay(new NBTTagCompound()));
+    }
+
+    @Override
+    public void onDataPacket(NetworkManager net, SPacketUpdateTileEntity packet) {
+        readDisplay(packet.getNbtCompound(), true);
+    }
+
+    /** The last round's reveal, for the renderer. Empty before anyone has played. */
+    public int[] display() {
+        return display;
+    }
+
+    /** The last round's fanfare, or null before anyone has played. */
+    @Nullable
+    public CasinoFanfare displayFanfare() {
+        CasinoFanfare[] all = CasinoFanfare.values();
+        return displayFanfare >= 0 && displayFanfare < all.length ? all[displayFanfare] : null;
+    }
+
+    /**
+     * Client: ticks since the last round arrived, or -1 when it arrived already settled (the chunk
+     * loaded after it was played). Compare with {@link #displayRevealTicks()}.
+     */
+    public double ticksSinceRound(float partialTicks) {
+        if (displayArrivedAt < 0L || world == null) {
+            return -1.0;
+        }
+        return world.getTotalWorldTime() - displayArrivedAt + partialTicks;
+    }
+
+    /** How long the last round animates before its result shows. */
+    public int displayRevealTicks() {
+        return displayRevealTicks;
     }
 
     /**

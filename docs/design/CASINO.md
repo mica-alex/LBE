@@ -160,6 +160,37 @@ produces a block which does nothing at all.
 
 ---
 
+## Presentation: what the rest of the floor sees and hears
+
+None of this touches money, and nothing in it is read back by anything that does.
+
+**The reveal is the moment, and everything waits for it.** The server settles a round the
+instant the bet arrives, but the player's screen animates for `CasinoFanfare.REVEAL_TICKS` before
+it shows them how it went. Anything that announces the result — a sound other players hear,
+particles, the jackpot chat line — is queued in `CasinoEffects` and fired when that runs out.
+Announcing at settlement tells the player the outcome before their own reels stop. (Mines' tile
+turns are shown instantly, so they queue with no delay.)
+
+**Who plays which sound.** The player's own sounds come from `client/gui/CasinoSounds`, in step
+with the screen's animation, because only the screen knows when a reel lands. Everyone else
+hears the win from the server, at the machine, with the player excluded so nothing plays twice.
+`CasinoFanfare` classifies each round (loss, push, win, big win, jackpot) for both sides. It is a
+shared constant rather than config because config is never synced, and a server-side threshold
+could not reach the screen that plays the player's sting.
+
+**Display state is a one-way copy.** When a round settles, the machine's tile entity keeps its
+reveal and fanfare and sends them to every client watching the chunk, and
+`TileEntityCasinoMachineRenderer` draws them: reels on a slot machine, the wheel on a roulette
+table, cards on the card tables, and a lamp over the machine after a win. It is never saved (a
+restarted server has nothing to show until someone plays) and never read by the server. It shows
+only what the player was already sent, once the round is over. Mines' layout, for instance, is
+never shown mid-round.
+
+**The lamp is drawn, not lit.** Making the block emit light on a win would relight the area every
+time, which is the most expensive thing a block can ask for.
+
+---
+
 ## The games
 
 Ten, all sharing one block class, one tile entity, one screen and one pair of packets. Adding
