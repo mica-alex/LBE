@@ -37,6 +37,9 @@ public final class CasinoBlocks {
     private static BlockCasinoLeaderboard leaderboard;
     private static ItemBlock leaderboardItem;
 
+    /** The decor set's items: carpet, stool, rope post and neon sign. For model binding. */
+    private static final java.util.List<ItemBlock> DECOR_ITEMS = new java.util.ArrayList<>();
+
     /** The loot box vendor, and its item. */
     private static BlockLootVendor vendor;
     private static ItemBlock vendorItem;
@@ -61,6 +64,23 @@ public final class CasinoBlocks {
         progressiveSignItem = registerItemBlock(progressiveSign);
         vendor = LbeRegistry.addBlock(new BlockLootVendor());
         vendorItem = registerItemBlock(vendor);
+
+        // Decor: no money anywhere near these, so they are plain blocks.
+        for (Block decor : new Block[] {
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockCasinoCarpet("casino_carpet"),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockCasinoCarpet(
+                "casino_carpet_royal"),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockBarStool(),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockVelvetRopePost(),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockNeonSign(),
+        }) {
+            DECOR_ITEMS.add(registerItemBlock(LbeRegistry.addBlock(decor)));
+        }
+    }
+
+    /** The decor set's items. */
+    public static java.util.List<ItemBlock> decorItems() {
+        return Collections.unmodifiableList(DECOR_ITEMS);
     }
 
     /** The vendor's item form. Null before {@link #init()}. */

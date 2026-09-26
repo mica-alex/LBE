@@ -99,6 +99,9 @@ public class Lbe {
         GameRegistry.registerTileEntity(
             com.micatechnologies.minecraft.lbe.casino.block.TileEntityLootVendor.class,
             new ResourceLocation(LbeConstants.MOD_NAMESPACE, "loot_box_vendor"));
+        GameRegistry.registerTileEntity(
+            com.micatechnologies.minecraft.lbe.casino.decor.TileEntityNeonSign.class,
+            new ResourceLocation(LbeConstants.MOD_NAMESPACE, "neon_sign"));
         LbeTab.initTabElements();
         // Weight 0 is the middle of the road: LBE has no opinion about running before or after any
         // other generator, because it only ever writes into air that is already there.

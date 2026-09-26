@@ -213,6 +213,52 @@ def table_top(base, dark, motif):
     return rows
 
 
+def carpet(base, accent, gem):
+    """A diamond lattice that tiles: each tile's diamond touches its edges at their midpoints,
+    so neighbouring tiles join into one continuous pattern, with a gem at every centre."""
+    rows = grid(base)
+    for y in range(16):
+        for x in range(16):
+            d = abs(x - 7.5) + abs(y - 7.5)
+            if 6.5 <= d <= 7.5:
+                rows[y][x] = accent
+            elif d <= 1.0:
+                rows[y][x] = gem
+            elif 3.0 <= d <= 3.5:
+                rows[y][x] = lighten(base, 0x18)
+    return rows
+
+
+def shaded(light, dark):
+    """A horizontal gradient, for metal and rope that should read as round rather than flat."""
+    rows = grid(light)
+    for y in range(16):
+        for x in range(16):
+            t = abs(x - 7.5) / 7.5
+            rows[y][x] = tuple(int(light[i] + (dark[i] - light[i]) * t) for i in range(3))
+    return rows
+
+
+def decor():
+    """The decor set: carpets, the stool, the rope post, the neon sign's backing."""
+    faces = {
+        "casino_carpet": carpet((0x6A, 0x0C, 0x16), GOLD, GOLD_LIT),
+        "casino_carpet_royal": carpet((0x12, 0x1E, 0x5A), GOLD, (0xE0, 0x40, 0x50)),
+        "bar_stool_metal": shaded((0xE4, 0xE6, 0xEC), (0x70, 0x74, 0x80)),
+        "bar_stool_cushion": carpet((0xA0, 0x10, 0x20), (0x80, 0x0A, 0x18), (0xC0, 0x30, 0x40)),
+        "velvet_rope_brass": shaded(GOLD_LIT, GOLD_DARK),
+        "velvet_rope": shaded((0xC0, 0x18, 0x28), (0x60, 0x06, 0x10)),
+    }
+    backing = grid((0x0C, 0x0A, 0x10))
+    frame(backing, (0x24, 0x20, 0x2C))
+    faces["neon_sign_front"] = backing
+    faces["neon_sign_side"] = grid((0x24, 0x20, 0x2C))
+    for name, rows in faces.items():
+        write_png(os.path.join(OUT_DIR, name + ".png"), rows)
+    print("wrote decor (%d)" % len(faces))
+    return len(faces)
+
+
 def main():
     written = 0
     for name, (tall, base, dark, motif) in MACHINES.items():
@@ -300,6 +346,7 @@ def main():
         write_png(os.path.join(OUT_DIR, name + ".png"), rows)
         written += 1
     print("wrote loot_box_vendor")
+    written += decor()
     print("%d textures written" % written)
 
 
