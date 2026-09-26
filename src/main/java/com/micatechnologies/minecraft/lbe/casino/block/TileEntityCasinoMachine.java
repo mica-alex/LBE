@@ -279,7 +279,10 @@ public class TileEntityCasinoMachine extends TileEntity {
                 + " and " + LbeEconomy.format(LbeConfig.maximumBet) + ".");
             return;
         }
-        if (!cooldownExpired(player)) {
+        // Not at a shared table: a bet there only joins the round, and placing two or three in a
+        // row is how the game is played. The cooldown silently dropped the second of them, while
+        // the table's own cap on bets per round already stops a held-down button.
+        if (!game.isSharedRound() && !cooldownExpired(player)) {
             // Silent: somebody spamming the button does not need a wall of chat about it, and an
             // attacker learns nothing either way.
             return;
@@ -713,8 +716,9 @@ public class TileEntityCasinoMachine extends TileEntity {
     private static String describeTurn(BlackjackGame table) {
         BlackjackHand hand = table.hands().get(table.activeHand());
         String which = table.hands().size() > 1 ? "Hand " + (table.activeHand() + 1) + ": " : "";
+        // Short enough for one line of the screen after a split; the buttons list the choices.
         return which + (hand.isSoft() ? "soft " : "") + hand.total() + " against "
-            + table.dealer().get(0) + ". Hit, stand, double or split?";
+            + table.dealer().get(0) + ". Your move.";
     }
 
     private static String describeResult(BlackjackGame table) {
@@ -726,9 +730,12 @@ public class TileEntityCasinoMachine extends TileEntity {
             String verdict = hand.isBlackjack() && r > 1.0 ? "blackjack!"
                 : hand.isBust() ? "bust" : r > 1.0 ? "wins" : r == 1.0 ? "pushes" : "loses";
             if (table.hands().size() > 1) {
-                text.append("Hand ").append(i + 1).append(": ");
+                // Each hand's total is already drawn beside it; repeating it ran off the screen.
+                text.append("Hand ").append(i + 1).append(' ');
+            } else {
+                text.append(hand.total()).append(' ');
             }
-            text.append(hand.total()).append(' ').append(verdict).append(". ");
+            text.append(verdict).append(". ");
         }
         return text.toString().trim();
     }
@@ -762,7 +769,7 @@ public class TileEntityCasinoMachine extends TileEntity {
                 settleBlackjack(player, open);   // a blackjack on the deal, either side
             } else {
                 openHands.put(player.getUniqueID(), open);
-                sendBlackjackState(player, table, "Hit, stand, double or split?");
+                sendBlackjackState(player, table, describeTurn(table));
             }
             return;
         }
@@ -1008,6 +1015,13 @@ public class TileEntityCasinoMachine extends TileEntity {
         String text = message == null || message.isEmpty() ? "That bet was refused." : message;
         player.sendMessage(new TextComponentString(text)
             .setStyle(new Style().setColor(TextFormatting.RED)));
+        // And to the screen, which is otherwise left spinning on a bet that was never taken until
+        // it gives up. Chat keeps the whole line; the screen trims a long one to fit.
+        net.minecraft.block.Block block = getBlockType();
+        CasinoGame game = block instanceof BlockCasinoMachine
+            ? ((BlockCasinoMachine) block).game() : CasinoGame.SLOTS;
+        LbeNetwork.CHANNEL.sendTo(PacketCasinoResult.notice(game, balanceOf(player), text),
+            player);
     }
 
     private boolean cooldownExpired(EntityPlayer player) {

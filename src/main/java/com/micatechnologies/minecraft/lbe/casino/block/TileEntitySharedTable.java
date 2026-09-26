@@ -179,16 +179,18 @@ public class TileEntitySharedTable extends TileEntityCasinoMachine implements IT
         sync();
 
         // Settle every bet, grouped by player so each gets one result for the round.
-        Map<UUID, double[]> totals = new LinkedHashMap<>();   // staked, returned, failures
+        // staked, returned, failures, best single bet's multiplier
+        Map<UUID, double[]> totals = new LinkedHashMap<>();
         Map<UUID, String> names = new LinkedHashMap<>();
         for (Bet bet : bets) {
             double perStake = returnFor(game, bet.option);
             double total = round(bet.wager.amount() * perStake);
             boolean ok = total > 0.0 ? bet.wager.payOut(total) : bet.wager.loseToHouse();
-            double[] sums = totals.computeIfAbsent(bet.player, id -> new double[3]);
+            double[] sums = totals.computeIfAbsent(bet.player, id -> new double[4]);
             sums[0] += bet.wager.amount();
             if (ok) {
                 sums[1] += total;
+                sums[3] = Math.max(sums[3], perStake);
             } else {
                 sums[2] += 1;
             }
@@ -218,8 +220,13 @@ public class TileEntitySharedTable extends TileEntityCasinoMachine implements IT
             if (entry.getValue()[2] > 0) {
                 reject(player, "Part of your bet could not be settled. It is safe — tell an operator.");
             }
-            afterSettle(player, game, multiplier, staked, returned, reveal, describe,
-                CasinoFanfare.of(multiplier, false), false, CasinoFanfare.SHARED_REVEAL_TICKS, 0.0);
+            // A big win is judged bet by bet, as a casino would: 15:1 landing is a big win for
+            // whoever backed it, even if their other bets on the round lost. Judged on the round
+            // as a whole it vanished into them, and never reached the board.
+            CasinoFanfare fanfare = CasinoFanfare.of(Math.max(multiplier, entry.getValue()[3]),
+                false);
+            afterSettle(player, game, multiplier, staked, returned, reveal, describe, fanfare,
+                false, CasinoFanfare.SHARED_REVEAL_TICKS, 0.0);
         }
         Lbe.LOGGER.debug("[casino] {} at {} settled {} player(s).", game.displayName(), pos,
             totals.size());

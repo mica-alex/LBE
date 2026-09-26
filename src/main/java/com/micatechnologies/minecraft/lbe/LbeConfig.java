@@ -682,16 +682,16 @@ public final class LbeConfig {
         enableCasino = config.getBoolean("enableCasino", CATEGORY_CASINO, enableCasino,
             "Whether the casino games accept bets. Turning this off leaves the machines placeable "
                 + "and inert, which is what you want if you like the blocks but not the gambling.");
-        minimumBet = config.getFloat("minimumBet", CATEGORY_CASINO, (float) minimumBet,
+        minimumBet = money(config.getFloat("minimumBet", CATEGORY_CASINO, (float) minimumBet,
             0.01F, 1_000_000.0F,
-            "Smallest bet a machine will take.");
-        maximumBet = config.getFloat("maximumBet", CATEGORY_CASINO, (float) maximumBet,
+            "Smallest bet a machine will take."));
+        maximumBet = money(config.getFloat("maximumBet", CATEGORY_CASINO, (float) maximumBet,
             0.01F, 1_000_000.0F,
             "Largest bet a machine will take. This is the real control on how fast the casino "
                 + "moves money: the slot jackpot pays 100x the bet, so a maximum of 100 means a "
                 + "single lucky spin can pay out 10,000. Note that SUM's own maxWalletTransaction "
                 + "caps payouts independently — set it below maximumBet*100 and jackpots will be "
-                + "refused rather than paid.");
+                + "refused rather than paid."));
         spinCooldownSeconds = config.getFloat("spinCooldownSeconds", CATEGORY_CASINO,
             (float) spinCooldownSeconds, 0.0F, 60.0F,
             "How long a machine ignores the same player after a spin. Stops a held-down button "
@@ -720,31 +720,33 @@ public final class LbeConfig {
             progressiveEnabled,
             "Whether slot machines share a progressive jackpot: a slice of every slot stake feeds a "
                 + "pool that three sevens win on top of the normal payout.");
-        progressiveShare = config.getFloat("progressiveShare", CATEGORY_CASINO,
+        progressiveShare = money(config.getFloat("progressiveShare", CATEGORY_CASINO,
             (float) progressiveShare, 0.0F, 0.05F,
             "Share of each slot stake that feeds the progressive. Every unit is eventually paid "
                 + "back out, so this is added straight to slots' return: 0.01 makes slots about 85%. "
-                + "Capped at 0.05 so slots always keep an edge.");
-        progressiveSeed = config.getFloat("progressiveSeed", CATEGORY_CASINO,
+                + "Capped at 0.05 so slots always keep an edge."));
+        progressiveSeed = money(config.getFloat("progressiveSeed", CATEGORY_CASINO,
             (float) progressiveSeed, 0.0F, 1000000.0F,
             "What the progressive restarts at after it is won. This is new money each time it is "
-                + "won, so keep it modest relative to how much slots see between jackpots.");
-        dailyLossCap = config.getFloat("dailyLossCap", CATEGORY_CASINO, (float) dailyLossCap,
+                + "won, so keep it modest relative to how much slots see between jackpots."));
+        dailyLossCap = money(config.getFloat("dailyLossCap", CATEGORY_CASINO, (float) dailyLossCap,
             0.0F, 1.0E9F,
             "The most a player may lose at the casino in one UTC day, or 0 for no cap. A bet is "
                 + "refused if losing all of it would pass the cap. Players can set their own lower "
-                + "limit with /casino limit.");
-        compRate = config.getFloat("compRate", CATEGORY_CASINO, (float) compRate, 0.0F, 0.005F,
+                + "limit with /casino limit."));
+        compRate = money(config.getFloat("compRate", CATEGORY_CASINO, (float) compRate, 0.0F,
+            0.005F,
             "What comp points are worth, as a share of what is staked: players earn a point per "
                 + "unit staked, and a loot box costs its vendor price divided by this. 0 turns comps "
                 + "off. Capped at 0.005 because comps add straight onto every game's return, and "
-                + "above that perfect blackjack would pay to play.");
+                + "above that perfect blackjack would pay to play."));
         for (com.micatechnologies.minecraft.lbe.rarity.Rarity tier
                 : com.micatechnologies.minecraft.lbe.rarity.Rarity.values()) {
-            BOX_PRICES[tier.ordinal()] = config.getFloat("boxPrice_" + tier.id(), CATEGORY_CASINO,
+            BOX_PRICES[tier.ordinal()] = money(config.getFloat("boxPrice_" + tier.id(),
+                CATEGORY_CASINO,
                 (float) BOX_PRICES[tier.ordinal()], 0.01F, 1000000.0F,
                 "What a loot box vendor charges for a " + tier.id() + " box. The money leaves the "
-                    + "economy, like a lost bet.");
+                    + "economy, like a lost bet."));
         }
 
         if (config.hasChanged()) {
@@ -854,5 +856,15 @@ public final class LbeConfig {
             }
         }
         return false;
+    }
+
+    /**
+     * A casino setting as the decimal the file says. Forge stores these as floats, so 0.01 arrives
+     * as 0.0099999998, and money worked out from it lands a hair under a whole cent: the comp
+     * prices and the progressive sign were each a cent out before this. Going through the float's
+     * own shortest decimal gives back exactly what was written.
+     */
+    private static double money(float value) {
+        return Double.parseDouble(Float.toString(value));
     }
 }

@@ -133,13 +133,13 @@ public final class ResponsiblePlay {
         Player p = view(id, now);
         if (p.excludedUntil > now) {
             long days = (p.excludedUntil - now + DAY_MILLIS - 1) / DAY_MILLIS;
-            return "You have excluded yourself from the casino for " + days + " more day"
-                + (days == 1 ? "" : "s") + ".";
+            // Short enough for one line of a machine's screen, where it is also shown.
+            return "You are self-excluded for " + days + " more day" + (days == 1 ? "" : "s")
+                + ".";
         }
         double limit = effectiveLimit(p, serverCap);
         if (limit >= 0.0 && p.lossToday + amount > limit + 1e-9) {
-            return "That bet could take you past your daily loss limit of "
-                + money.apply(limit) + ". It resets at midnight UTC.";
+            return "Refused: your daily loss limit is " + money.apply(limit) + ".";
         }
         return null;
     }

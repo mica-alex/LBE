@@ -369,6 +369,12 @@ other, and each bettor gets their own result while the room watches the wheel or
 who logs off stays in the round: the bank pays a winner only while online and otherwise leaves
 the stake held, so nothing is lost.
 
+A big win at a shared table is judged **bet by bet**: 15:1 landing is a big win for whoever backed
+it, even if their other bets on the same spin lost. Judged on the player's round as a whole, the
+win disappeared into those losses and never reached the board. For the same reason the per-player
+spin cooldown does not apply here: placing several bets in a row is how the table is played, and
+the table's cap of eight bets per player per round already stops a held-down button.
+
 **Every bet is the same bet**, as everywhere else here. The wheel's segment counts and payouts are
 chosen together so every segment returns 96%. The race uses **fixed odds** priced to return 90% on
 every pig, rather than a pari-mutuel pool, because a pool only works with a crowd: a lone winner

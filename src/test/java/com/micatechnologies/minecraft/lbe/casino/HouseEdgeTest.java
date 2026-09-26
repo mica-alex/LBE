@@ -76,6 +76,12 @@ class HouseEdgeTest {
         assertEquals(50.0, pot.pool(), 1.0e-9);
         pot.contribute(10.0, -1.0);                         // a negative share adds nothing
         assertEquals(50.0, pot.pool(), 1.0e-9);
+        // The share as the config file delivers it, a float: twenty $100 spins showed $69.99.
+        ProgressiveJackpot fromConfig = new ProgressiveJackpot(50.0);
+        for (int spin = 0; spin < 20; spin++) {
+            fromConfig.contribute(100.0, (float) 0.01);
+        }
+        assertEquals(70.0, fromConfig.pool(), 1.0e-9);
     }
 
     @Test

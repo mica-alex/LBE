@@ -436,6 +436,12 @@ public class GuiCasinoMachine extends GuiScreen {
         switch (message.stage()) {
             case BALANCE:
                 balance = message.balance();
+                if (animating && pending == null && !game.isSharedRound()) {
+                    // A notice instead of a result: the bet was refused, so stop spinning and let
+                    // the status line say why.
+                    animating = false;
+                    pendingBalance = PacketCasinoResult.UNKNOWN_BALANCE;
+                }
                 return;
             case DEALT:
                 // Money is down and something has been dealt, but nothing is decided. Show it

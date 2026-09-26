@@ -34,12 +34,16 @@ public final class ProgressiveJackpot {
 
     /** What the pool would pay right now, in whole cents, rounded down. */
     public double pool() {
-        return Math.floor(pool * 100.0) / 100.0;
+        // The nudge (a ten-thousandth of a cent) is for pools saved before contribute() rounded
+        // the share, which sit a hair under a whole cent and would otherwise show a cent short.
+        return Math.floor(pool * 100.0 + 1.0e-4) / 100.0;
     }
 
     /** Adds a stake's share to the pool. Kept exact; only paying out rounds. */
     public void contribute(double stake, double share) {
-        double clamped = Math.max(0.0, Math.min(MAX_SHARE, share));
+        // Config stores the share as a float, so 0.01 arrives as 0.0099999998; twenty $100 spins
+        // then fed $19.9999995 and the sign showed a cent short. Round it back to what was meant.
+        double clamped = Math.max(0.0, Math.min(MAX_SHARE, Math.round(share * 1.0e7) / 1.0e7));
         if (stake > 0.0 && clamped > 0.0) {
             pool += stake * clamped;
             version++;

@@ -7,20 +7,16 @@ by accident.
 
 ## Not yet seen in play
 
-These are covered by unit tests, and the code around them was played on 2026-09-26, but the paths
-themselves were not reached in the in-game pass. Worth watching for on a live server, or checking
-directly in the next dev-client session.
+These are covered by unit tests, but have not been reached in a dev client. A second pass on
+2026-09-26 played blackjack splits (with a double after), the leaderboard with a winner on both
+columns, the progressive rising from slot play, the refund on logging out mid-hand, comp
+redemption, and self-exclusion at a machine and the vendor, then lifted by an operator. What is
+left:
 
 | Item | Why it was not reached | How to check it |
 |---|---|---|
-| Blackjack splits | No pair was dealt during the pass | Play until a pair comes up, split, and check both hands settle and the ledger records both stakes |
-| Leaderboard with a winner listed | Only players who are ahead are listed, and no test player was | Win a round with `leaderboardShowsNames` on and look at the board |
-| Progressive pool rising from slot play | Checked by test and on the sign, not across real spins | Note the sign, play a few slot spins, confirm it rose by `progressiveShare` of each stake |
-| Refund of an open hand on logout | Resume-on-reopen was played; logging out mid-hand was not | Open a blackjack or craps round, log out, log back in, check the balance and the server log's refund line |
 | Raising a personal limit after 24 hours | The wait is real time | Raise a limit, come back a day later, confirm it took effect |
-| An active self-exclusion | Excluding a test player blocks the rest of the pass | Exclude a spare account for a day, confirm every machine and the vendor refuse, then `/casino lift` |
-| Redeeming comps | Test play does not earn the 2,000 points the cheapest box costs | Stake about $2,000 on a test account (the default rate is already the 0.5% cap), then `/casino redeem` |
-| Jackpot loot box and the big-win, jackpot and nerves-of-steel advancements | Jackpots are about 1 in 14,000 spins | Force a jackpot in a dev build, or wait for one on a live server |
+| Jackpot loot box, and the jackpot and nerves-of-steel advancements | Jackpots are about 1 in 14,000 spins | Force a jackpot in a dev build, or wait for one on a live server. The big-win advancement has been seen |
 | Sounds, by ear | Checked by reading the code, not listened to | Play each game with sound on |
 
 ## Deferred work
