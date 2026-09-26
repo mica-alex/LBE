@@ -179,8 +179,13 @@ presumed camera lean needed one and found `EntityViewRenderEvent.CameraSetup` al
 - Config parsers (`RarityOverrides`, `MaterialScores`, `KeyFilter`) **never throw** — malformed lines
   go to `problems()` and get logged at `WARN`. A typo on line 40 of a hand-edited config must not stop
   a world loading, and an author needs to be told about all of their typos at once.
-- Textures under `assets/lbe/textures/blocks` are **generated** by `tools/gen_box_textures.py`. Edit
-  the script, not the PNGs, unless you are replacing them with real art.
+- Textures under `assets/lbe/textures/blocks` are **generated** by `tools/gen_box_textures.py` (loot
+  boxes), `tools/gen_casino_textures.py` and `tools/gen_slot_textures.py` (machines). Edit the
+  script, not the PNGs, unless you are replacing them with real art.
+- The casino machines' block models and blockstates are **generated** by
+  `tools/gen_casino_models.py`. Two of its numbers, the screen recess depth and the felt height,
+  are mirrored in `TileEntityCasinoMachineRenderer`'s offsets. Change one and change the other, or
+  the screens float off the machines.
 
 ## Planning docs
 

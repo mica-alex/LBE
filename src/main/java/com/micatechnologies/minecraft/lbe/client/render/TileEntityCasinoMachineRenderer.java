@@ -96,8 +96,10 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
 
         GlStateManager.pushMatrix();
         if (game.isTall()) {
-            // The front of the upper half; the model's front face sits 1/16 in from the edge.
-            GlStateManager.translate(0.0D, 1.5D, 7.0D / 16.0D + 0.004D);
+            // The screen recess in the upper half: its face is SCREEN_Z = 4/16 behind the front
+            // edge, and it runs from the bottom of the upper block to the marquee at 12/16. Both
+            // numbers come from tools/gen_casino_models.py.
+            GlStateManager.translate(0.0D, 1.0D + 6.0D / 16.0D, 4.0D / 16.0D + 0.004D);
         } else {
             // The table top, laid flat, with the top of the screen at the far side.
             GlStateManager.translate(0.0D, 0.875D + 0.004D, 0.0D);
@@ -334,10 +336,10 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
     }
 
     private void drawVideoPoker(Round round) {
-        panel(-26, -14, 26, 14);
+        panel(-24, -14, 24, 14);
         for (int i = 0; i < 5; i++) {
             Card card = round.settled() ? cardOf(round.value(i, 0)) : null;
-            card(-20.0F + i * 10.0F, 0.0F, 8.5F, 12.0F, card);
+            card(-19.0F + i * 9.5F, 0.0F, 8.5F, 12.0F, card);
         }
     }
 
@@ -445,8 +447,9 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
         int g = (int) (((rgb >> 8) & 0xFF) * breathe);
         int b = (int) ((rgb & 0xFF) * breathe);
         int argb = 0xFF000000 | (r << 16) | (g << 8) | b;
-        float halfW = game.isTall() ? 27.0F : 31.0F;
-        float halfH = game.isTall() ? 30.0F : 31.0F;
+        // Round the screen recess on a cabinet (inside its light posts), round the felt on a table.
+        float halfW = game.isTall() ? 23.5F : 31.0F;
+        float halfH = game.isTall() ? 23.5F : 31.0F;
         float t = 2.0F;
         rect(-halfW, -halfH, halfW, -halfH + t, argb, Z_BACK);
         rect(-halfW, halfH - t, halfW, halfH, argb, Z_BACK);
