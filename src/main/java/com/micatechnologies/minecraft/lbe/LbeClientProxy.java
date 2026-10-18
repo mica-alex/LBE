@@ -41,6 +41,12 @@ public class LbeClientProxy extends LbeCommonProxy {
         net.minecraftforge.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
             com.micatechnologies.minecraft.lbe.casino.decor.TileEntityNeonSign.class,
             new com.micatechnologies.minecraft.lbe.client.render.TileEntityNeonSignRenderer());
+        net.minecraftforge.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
+            com.micatechnologies.minecraft.lbe.casino.decor.TileEntityCasinoPlaque.class,
+            new com.micatechnologies.minecraft.lbe.client.render.TileEntityCasinoPlaqueRenderer());
+        net.minecraftforge.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
+            com.micatechnologies.minecraft.lbe.casino.decor.TileEntityBouncer.class,
+            new com.micatechnologies.minecraft.lbe.client.render.TileEntityBouncerRenderer());
         // ModelRegistryEvent arrives on the Forge bus in 1.12.2; subscribe this proxy so
         // registerModels below is reached.
         MinecraftForge.EVENT_BUS.register(this);

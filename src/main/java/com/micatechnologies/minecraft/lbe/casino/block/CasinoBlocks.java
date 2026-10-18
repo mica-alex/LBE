@@ -6,7 +6,10 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
 import net.minecraft.block.Block;
+import net.minecraft.block.SoundType;
+import net.minecraft.block.material.Material;
 import net.minecraft.item.ItemBlock;
+import net.minecraft.util.math.AxisAlignedBB;
 
 /**
  * The casino's blocks: one {@link BlockCasinoMachine} per {@link CasinoGame}, created in
@@ -37,7 +40,7 @@ public final class CasinoBlocks {
     private static BlockCasinoLeaderboard leaderboard;
     private static ItemBlock leaderboardItem;
 
-    /** The decor set's items: carpet, stool, rope post and neon sign. For model binding. */
+    /** The decor set's items, from the carpets to the bouncer. For model binding. */
     private static final java.util.List<ItemBlock> DECOR_ITEMS = new java.util.ArrayList<>();
 
     /** The loot box vendor, and its item. */
@@ -70,9 +73,31 @@ public final class CasinoBlocks {
             new com.micatechnologies.minecraft.lbe.casino.decor.BlockCasinoCarpet("casino_carpet"),
             new com.micatechnologies.minecraft.lbe.casino.decor.BlockCasinoCarpet(
                 "casino_carpet_royal"),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockCasinoCarpetSolid(
+                "casino_carpet_block"),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockCasinoCarpetSolid(
+                "casino_carpet_royal_block"),
             new com.micatechnologies.minecraft.lbe.casino.decor.BlockBarStool(),
             new com.micatechnologies.minecraft.lbe.casino.decor.BlockVelvetRopePost(),
             new com.micatechnologies.minecraft.lbe.casino.decor.BlockNeonSign(),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockCasinoPlaque(),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockBouncer(),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockFloorPiece("cashier_cage",
+                Material.WOOD, SoundType.WOOD, 2.0F, Block.FULL_BLOCK_AABB),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockFloorPiece("bar_counter",
+                Material.WOOD, SoundType.WOOD, 2.0F,
+                new AxisAlignedBB(0.0D, 0.0D, 0.0D, 1.0D, 0.875D, 1.0D)),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockFloorPiece("bar_shelf",
+                Material.WOOD, SoundType.WOOD, 2.0F,
+                new AxisAlignedBB(0.0D, 0.0D, 0.5D, 1.0D, 1.0D, 1.0D)),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockChipStacks(),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockCardShoe(),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockShapedDecor(
+                "casino_chandelier", Material.IRON, SoundType.GLASS, 1.0F,
+                new AxisAlignedBB(0.0625D, 0.3125D, 0.0625D, 0.9375D, 1.0D, 0.9375D), false),
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockShapedDecor(
+                "light_pillar", Material.IRON, SoundType.METAL, 0.9375F,
+                new AxisAlignedBB(0.125D, 0.0D, 0.125D, 0.875D, 1.0D, 0.875D), true),
         }) {
             DECOR_ITEMS.add(registerItemBlock(LbeRegistry.addBlock(decor)));
         }

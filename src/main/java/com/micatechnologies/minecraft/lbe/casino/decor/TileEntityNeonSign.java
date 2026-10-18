@@ -11,9 +11,12 @@ import net.minecraft.tileentity.TileEntity;
 /** A neon sign's word and colour: chosen by a builder, so saved, and sent to clients to draw. */
 public class TileEntityNeonSign extends TileEntity {
 
-    /** The words a sign can show, in the order right-clicking steps through them. */
+    /**
+     * The words a sign can show, in the order right-clicking steps through them. Append only: a
+     * sign saves its word by index.
+     */
     public static final String[] WORDS = {
-        "CASINO", "JACKPOT", "SLOTS", "LUCKY", "777", "OPEN", "WIN", "BAR",
+        "CASINO", "JACKPOT", "SLOTS", "LUCKY", "777", "OPEN", "WIN", "BAR", "21+", "ADULTS ONLY",
     };
 
     private int word;
