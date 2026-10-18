@@ -193,6 +193,16 @@ never shown mid-round.
 **The lamp is drawn, not lit.** Making the block emit light on a win would relight the area every
 time, which is the most expensive thing a block can ask for.
 
+**A screen is a few draw calls, not hundreds.** Every machine's screen goes through
+`client/render/ScreenBatch`: its shapes, its textured quads and its text are each collected and
+drawn in one call when the screen ends, with text laid out from the vanilla font sheet rather than
+one immediate-mode draw per character. Faces that only turn or stay put (the roulette ring, the big
+wheel with its labels, the race board's lanes and names) are recorded once into display lists and
+replayed under a rotation. A cabinet's recessed screen is skipped when the viewer is behind the
+cabinet, where the model hides it anyway. On a floor of 28 machines this took the casino renderers
+from 1.25 ms to 0.48 ms a frame with identical pixels. New screen content should add to the batch
+(`rect`, `text`, `symbol`), never call `Tessellator.draw()` or `FontRenderer.drawString` per item.
+
 **Also at the reveal:**
 - **Redstone.** Both halves of the machine give a redstone and comparator signal of 6 for a win,
   11 for a big win and 15 for a jackpot, for one to five seconds. Builders do the rest.

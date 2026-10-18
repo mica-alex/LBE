@@ -74,6 +74,18 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
     private static final float Z_MID = 0.4F;
     private static final float Z_FRONT = 0.8F;
 
+    /** Every screen's shapes, symbols and text, drawn a kind at a time. Render thread only. */
+    private static final ScreenBatch BATCH = new ScreenBatch();
+
+    /**
+     * Faces that never change, only turn or stay put, recorded once into display lists and
+     * replayed each frame: the roulette ring, the big wheel, the race board's fixed lanes. -1
+     * until first drawn. They are the same for every machine of a game, so one each serves all.
+     */
+    private static int rouletteRing = -1;
+    private static int bigWheelFace = -1;
+    private static int raceBoardFace = -1;
+
     @Override
     public void render(TileEntityCasinoMachine tile, double x, double y, double z,
                        float partialTicks, int destroyStage, float alpha) {
@@ -109,10 +121,15 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
             GlStateManager.rotate(-90.0F, 1.0F, 0.0F, 0.0F);
         }
         GlStateManager.scale(UNIT, -UNIT, UNIT);
-        beginScreen();
-        drawTrim(game, tile.trimColour(), round.time);
-        drawGame(game, round);
-        endScreen();
+        // A cabinet's screen is set back in a recess, so from behind or beside the cabinet the
+        // model hides it completely; skip the work rather than draw what cannot be seen. A table
+        // top, the wheel and the race board are seen from every side and always drawn.
+        if (!game.isTall() || facesViewer(facing, x, z)) {
+            beginScreen();
+            drawTrim(game, tile.trimColour(), round.time);
+            drawGame(game, round);
+            endScreen();
+        }
         GlStateManager.popMatrix();
 
         drawLamp(game, round);
@@ -132,6 +149,16 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
         GlStateManager.popMatrix();
         drawPayout(game, round, tile.displayPayout(), x, y, z);
         OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, lastX, lastY);
+    }
+
+    /**
+     * Whether a cabinet's screen can be seen: the viewer is in front of its face, which is 4/16 in
+     * front of the block's centre. {@code x} and {@code z} are the block relative to the viewer.
+     */
+    private static boolean facesViewer(EnumFacing facing, double x, double z) {
+        double toViewerX = -x - 0.5D;
+        double toViewerZ = -z - 0.5D;
+        return toViewerX * facing.getXOffset() + toViewerZ * facing.getZOffset() > 4.0D / 16.0D;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -380,10 +407,36 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
             double remaining = 1.0D - round.progress();
             rotation = rest - 7.0D * Math.PI * remaining * remaining;
         }
-        GlStateManager.disableTexture2D();
-        Tessellator tessellator = Tessellator.getInstance();
-        BufferBuilder buffer = tessellator.getBuffer();
-        buffer.begin(4, DefaultVertexFormats.POSITION_COLOR);
+        // The ring is recorded at rest and turned into place.
+        if (rouletteRing < 0) {
+            rouletteRing = BATCH.record(() -> rouletteRing(0.0D));
+        }
+        GlStateManager.pushMatrix();
+        GlStateManager.rotate((float) Math.toDegrees(rotation), 0.0F, 0.0F, 1.0F);
+        BATCH.replay(rouletteRing);
+        GlStateManager.popMatrix();
+        double outer = 22.0D;
+        BufferBuilder buffer = BATCH.shapes();
+        // The pointer, just outside the rim at the top.
+        int pointer = 0xFFF0F0F0;
+        vertex(buffer, -2.5D, -outer - 3.0D, Z_MID, pointer);
+        vertex(buffer, 0.0D, -outer + 1.5D, Z_MID, pointer);
+        vertex(buffer, 2.5D, -outer - 3.0D, Z_MID, pointer);
+        rect(-10.0F, -10.0F, 10.0F, 10.0F, 0xFF3A2410, Z_MID);
+        if (round.settled()) {
+            int pocket = round.value(0, 0);
+            // Black pockets read in white: black ink on the dark hub would vanish.
+            int ink = RouletteGame.colourOf(pocket) == RouletteGame.Colour.BLACK ? 0xFFFFFF
+                : pocketColour(pocket) & 0xFFFFFF;
+            text(String.valueOf(pocket), 0.0F, -6.0F, ink, 1.5F);
+        }
+    }
+
+    /** The roulette pockets, turned by {@code rotation} radians. */
+    private static void rouletteRing(double rotation) {
+        int pockets = RouletteGame.POCKETS;
+        double segment = Math.PI * 2.0D / pockets;
+        BufferBuilder buffer = BATCH.shapes();
         double outer = 22.0D;
         double inner = 13.0D;
         for (int pocket = 0; pocket < pockets; pocket++) {
@@ -396,21 +449,6 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
             vertex(buffer, Math.cos(a0) * inner, Math.sin(a0) * inner, Z_BACK, colour);
             vertex(buffer, Math.cos(a1) * outer, Math.sin(a1) * outer, Z_BACK, colour);
             vertex(buffer, Math.cos(a1) * inner, Math.sin(a1) * inner, Z_BACK, colour);
-        }
-        // The pointer, just outside the rim at the top.
-        int pointer = 0xFFF0F0F0;
-        vertex(buffer, -2.5D, -outer - 3.0D, Z_MID, pointer);
-        vertex(buffer, 0.0D, -outer + 1.5D, Z_MID, pointer);
-        vertex(buffer, 2.5D, -outer - 3.0D, Z_MID, pointer);
-        tessellator.draw();
-        GlStateManager.enableTexture2D();
-        rect(-10.0F, -10.0F, 10.0F, 10.0F, 0xFF3A2410, Z_MID);
-        if (round.settled()) {
-            int pocket = round.value(0, 0);
-            // Black pockets read in white: black ink on the dark hub would vanish.
-            int ink = RouletteGame.colourOf(pocket) == RouletteGame.Colour.BLACK ? 0xFFFFFF
-                : pocketColour(pocket) & 0xFFFFFF;
-            text(String.valueOf(pocket), 0.0F, -6.0F, ink, 1.5F);
         }
     }
 
@@ -589,44 +627,25 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
             rotation = time * 0.01D;
         }
 
-        GlStateManager.disableTexture2D();
-        Tessellator tessellator = Tessellator.getInstance();
-        BufferBuilder buffer = tessellator.getBuffer();
-        buffer.begin(4, DefaultVertexFormats.POSITION_COLOR);
-        double inner = 22.0D;
-        double outer = 58.0D;
-        for (int i = 0; i < BigWheel.SEGMENTS; i++) {
-            int colour = segmentColour(BigWheel.segmentAt(i));
-            double a0 = rotation + i * segment;
-            double a1 = a0 + segment * 0.96D;   // a hairline gap between segments
-            quad(buffer, a0, a1, inner, outer, Z_BACK, colour);
+        FontRenderer font = getFontRenderer();
+        if (font != null && ScreenBatch.canRecord(font)) {
+            // The face, labels and all, is recorded at rest and turned into place.
+            if (bigWheelFace < 0) {
+                bigWheelFace = BATCH.record(() -> bigWheelFace(font, 0.0D));
+            }
+            GlStateManager.pushMatrix();
+            GlStateManager.rotate((float) Math.toDegrees(rotation), 0.0F, 0.0F, 1.0F);
+            BATCH.replay(bigWheelFace);
+            GlStateManager.popMatrix();
+        } else {
+            bigWheelFace(font, rotation);
         }
-        // A gold rim, a dark hub, and the pointer.
-        quad(buffer, 0.0D, Math.PI * 2.0D, outer, outer + 4.0D, Z_BACK, 0xFFD4A020);
-        quad(buffer, 0.0D, Math.PI * 2.0D, 0.0D, inner, Z_BACK, 0xFF201810);
+        double outer = 58.0D;
+        BufferBuilder buffer = BATCH.shapes();
         int pointer = 0xFFF4F4F4;
         vertex(buffer, -4.0D, -outer - 9.0D, Z_MID, pointer);
         vertex(buffer, 0.0D, -outer + 3.0D, Z_MID, pointer);
         vertex(buffer, 4.0D, -outer - 9.0D, Z_MID, pointer);
-        tessellator.draw();
-        GlStateManager.enableTexture2D();
-
-        // Each segment's price, reading outward.
-        FontRenderer font = getFontRenderer();
-        if (font != null) {
-            for (int i = 0; i < BigWheel.SEGMENTS; i++) {
-                BigWheel.Segment here = BigWheel.segmentAt(i);
-                String label = here == BigWheel.Segment.HOUSE ? "*" : String.valueOf(here.pays());
-                double angle = rotation + (i + 0.5D) * segment;
-                GlStateManager.pushMatrix();
-                GlStateManager.rotate((float) Math.toDegrees(angle) + 90.0F, 0.0F, 0.0F, 1.0F);
-                GlStateManager.translate(0.0F, -47.0F, Z_FRONT);
-                GlStateManager.scale(0.5F, 0.5F, 1.0F);
-                font.drawString(label, -font.getStringWidth(label) / 2, 0,
-                    here == BigWheel.Segment.ONE ? 0x201800 : 0xFFFFFF);
-                GlStateManager.popMatrix();
-            }
-        }
 
         // The hub: time to bet, or where it stopped.
         String hub;
@@ -644,6 +663,36 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
         }
         if (!hub.isEmpty()) {
             text(hub, 0.0F, -5.0F, hubColour, 1.0F);
+        }
+    }
+
+    /**
+     * The big wheel's face turned by {@code rotation} radians: the segments, a gold rim, a dark
+     * hub, and each segment's price reading outward.
+     */
+    private static void bigWheelFace(@Nullable FontRenderer font, double rotation) {
+        double segment = Math.PI * 2.0D / BigWheel.SEGMENTS;
+        BufferBuilder buffer = BATCH.shapes();
+        double inner = 22.0D;
+        double outer = 58.0D;
+        for (int i = 0; i < BigWheel.SEGMENTS; i++) {
+            int colour = segmentColour(BigWheel.segmentAt(i));
+            double a0 = rotation + i * segment;
+            double a1 = a0 + segment * 0.96D;   // a hairline gap between segments
+            quad(buffer, a0, a1, inner, outer, Z_BACK, colour);
+        }
+        quad(buffer, 0.0D, Math.PI * 2.0D, outer, outer + 4.0D, Z_BACK, 0xFFD4A020);
+        quad(buffer, 0.0D, Math.PI * 2.0D, 0.0D, inner, Z_BACK, 0xFF201810);
+        if (font == null) {
+            return;
+        }
+        for (int i = 0; i < BigWheel.SEGMENTS; i++) {
+            BigWheel.Segment here = BigWheel.segmentAt(i);
+            String label = here == BigWheel.Segment.HOUSE ? "*" : String.valueOf(here.pays());
+            double angle = rotation + (i + 0.5D) * segment;
+            BATCH.text(font, label, 0.0F, -47.0F, Z_FRONT, 0.5F,
+                (float) Math.toDegrees(angle) + 90.0F,
+                here == BigWheel.Segment.ONE ? 0x201800 : 0xFFFFFF, true);
         }
     }
 
@@ -672,8 +721,15 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
     private void drawRaceBoard(TileEntitySharedTable table, float partialTicks, double time) {
         GlStateManager.translate(0.0D, 2.75D, 5.0D / 16.0D);
         GlStateManager.scale(UNIT, -UNIT, UNIT);
-        rect(-97.0F, -45.0F, 97.0F, 45.0F, 0xFFD4A020, Z_BACK);
-        rect(-95.0F, -43.0F, 95.0F, 43.0F, 0xFF0E2A18, Z_BACK + 0.05F);
+        FontRenderer font = getFontRenderer();
+        if (font != null && ScreenBatch.canRecord(font)) {
+            if (raceBoardFace < 0) {
+                raceBoardFace = BATCH.record(() -> raceBoardFace(font));
+            }
+            BATCH.replay(raceBoardFace);
+        } else {
+            raceBoardFace(font);
+        }
 
         boolean revealing = table.phase() == TileEntitySharedTable.Phase.REVEALING
             && table.outcome() >= 0;
@@ -689,20 +745,16 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
         } else {
             status = "PLACE YOUR BETS";
         }
-        text("PIG RACE", -70.0F, -40.0F, 0xFFD040, 0.7F);
         text(status, 40.0F, -39.0F, 0xFFFFFF, 0.6F);
 
         float trackLeft = -36.0F;
         float trackRight = 84.0F;
-        rect(trackRight, -31.0F, trackRight + 1.5F, 41.0F, 0xFFF4F4F4, Z_MID);
         for (int i = 0; i < pigs.length; i++) {
             float laneTop = -31.0F + i * 12.0F;
-            boolean winner = revealing && progress >= 1.0D && table.outcome() == i;
-            rect(-95.0F, laneTop, 95.0F, laneTop + 11.0F,
-                winner ? 0xFF6A5010 : (i % 2 == 0 ? 0xFF143A22 : 0xFF10321C), Z_BACK + 0.1F);
-            text(pigs[i].displayName(), -64.0F, laneTop + 2.0F, 0xFFFFFF, 0.45F);
-            text(String.format(java.util.Locale.ROOT, "%.1fx", pigs[i].returnMultiplier()),
-                -44.0F, laneTop + 2.0F, 0x7CFC7C, 0.45F);
+            if (revealing && progress >= 1.0D && table.outcome() == i) {
+                // The winner's lane lights up, just over its recorded colour.
+                rect(-95.0F, laneTop, 95.0F, laneTop + 11.0F, 0xFF6A5010, Z_BACK + 0.15F);
+            }
             double position = revealing
                 ? pigPosition(table.seed(), i, i == table.outcome(), progress) : 0.0;
             float x = trackLeft + (float) position * (trackRight - trackLeft - 10.0F);
@@ -711,6 +763,35 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
             rect(x, y, x + 9.0F, y + 5.5F, 0xFFF0A0B4, Z_MID);          // body
             rect(x + 8.0F, y + 1.5F, x + 10.5F, y + 4.0F, 0xFFD87890, Z_MID + 0.1F);   // snout
             rect(x + 6.5F, y - 1.0F, x + 8.0F, y + 0.5F, 0xFFD87890, Z_MID + 0.1F);   // ear
+        }
+    }
+
+    /**
+     * What on the race board never changes: the frame, the lanes, the finish line, the title,
+     * and each pig's name and price.
+     */
+    private static void raceBoardFace(@Nullable FontRenderer font) {
+        rect(-97.0F, -45.0F, 97.0F, 45.0F, 0xFFD4A020, Z_BACK);
+        rect(-95.0F, -43.0F, 95.0F, 43.0F, 0xFF0E2A18, Z_BACK + 0.05F);
+        float trackRight = 84.0F;
+        rect(trackRight, -31.0F, trackRight + 1.5F, 41.0F, 0xFFF4F4F4, Z_MID);
+        PigRace.Pig[] pigs = PigRace.Pig.values();
+        for (int i = 0; i < pigs.length; i++) {
+            float laneTop = -31.0F + i * 12.0F;
+            rect(-95.0F, laneTop, 95.0F, laneTop + 11.0F,
+                i % 2 == 0 ? 0xFF143A22 : 0xFF10321C, Z_BACK + 0.1F);
+        }
+        if (font == null) {
+            return;
+        }
+        BATCH.text(font, "PIG RACE", -70.0F, -40.0F, Z_FRONT, 0.7F, 0.0F, 0xFFD040, true);
+        for (int i = 0; i < pigs.length; i++) {
+            float laneTop = -31.0F + i * 12.0F;
+            BATCH.text(font, pigs[i].displayName(), -64.0F, laneTop + 2.0F, Z_FRONT, 0.45F, 0.0F,
+                0xFFFFFF, true);
+            BATCH.text(font,
+                String.format(java.util.Locale.ROOT, "%.1fx", pigs[i].returnMultiplier()),
+                -44.0F, laneTop + 2.0F, Z_FRONT, 0.45F, 0.0F, 0x7CFC7C, true);
         }
     }
 
@@ -881,6 +962,7 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
     }
 
     private static void endScreen() {
+        BATCH.flush();
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         GlStateManager.enableCull();
         GlStateManager.enableLighting();
@@ -919,38 +1001,22 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
         return TileEntityCasinoMachine.cardFromId(id);
     }
 
-    private void symbol(int index, int count, float x1, float y1, float x2, float y2) {
-        bindTexture(SYMBOLS);
-        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+    private static void symbol(int index, int count, float x1, float y1, float x2, float y2) {
         double v0 = index / (double) count;
         double v1 = (index + 1) / (double) count;
-        Tessellator tessellator = Tessellator.getInstance();
-        BufferBuilder buffer = tessellator.getBuffer();
-        buffer.begin(7, DefaultVertexFormats.POSITION_TEX);
+        BufferBuilder buffer = BATCH.textured(SYMBOLS);
         buffer.pos(x1, y2, Z_MID).tex(0.0D, v1).endVertex();
         buffer.pos(x2, y2, Z_MID).tex(1.0D, v1).endVertex();
         buffer.pos(x2, y1, Z_MID).tex(1.0D, v0).endVertex();
         buffer.pos(x1, y1, Z_MID).tex(0.0D, v0).endVertex();
-        tessellator.draw();
     }
 
     private static void rect(float x1, float y1, float x2, float y2, int argb, float z) {
-        GlStateManager.disableTexture2D();
-        Tessellator tessellator = Tessellator.getInstance();
-        BufferBuilder buffer = tessellator.getBuffer();
-        buffer.begin(7, DefaultVertexFormats.POSITION_COLOR);
-        vertex(buffer, x1, y2, z, argb);
-        vertex(buffer, x2, y2, z, argb);
-        vertex(buffer, x2, y1, z, argb);
-        vertex(buffer, x1, y1, z, argb);
-        tessellator.draw();
-        GlStateManager.enableTexture2D();
+        BATCH.rect(x1, y1, x2, y2, argb, z);
     }
 
     private static void vertex(BufferBuilder buffer, double x, double y, float z, int argb) {
-        buffer.pos(x, y, z)
-            .color((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, (argb >>> 24) & 0xFF)
-            .endVertex();
+        ScreenBatch.vertex(buffer, x, y, z, argb);
     }
 
     /** Text centred on {@code cx}, top at {@code y}, drawn in front of everything else. */
@@ -959,12 +1025,7 @@ public class TileEntityCasinoMachineRenderer extends TileEntitySpecialRenderer<T
         if (font == null) {
             return;
         }
-        GlStateManager.pushMatrix();
-        GlStateManager.translate(cx, y, Z_FRONT);
-        GlStateManager.scale(scale, scale, 1.0F);
-        font.drawString(text, -font.getStringWidth(text) / 2, 0, rgb);
-        GlStateManager.popMatrix();
-        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        BATCH.text(font, text, cx, y, Z_FRONT, scale, 0.0F, rgb, true);
     }
 
     private static int pocketColour(int pocket) {

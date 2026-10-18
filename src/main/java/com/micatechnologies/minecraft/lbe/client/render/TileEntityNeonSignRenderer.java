@@ -19,6 +19,9 @@ public class TileEntityNeonSignRenderer extends TileEntitySpecialRenderer<TileEn
 
     private static final double MAX_DISTANCE_SQ = 48.0D * 48.0D;
 
+    /** The halo's eight copies and the tube, drawn in one call. Render thread only. */
+    private static final ScreenBatch BATCH = new ScreenBatch();
+
     @Override
     public void render(TileEntityNeonSign tile, double x, double y, double z, float partialTicks,
                        int destroyStage, float alpha) {
@@ -68,6 +71,7 @@ public class TileEntityNeonSignRenderer extends TileEntitySpecialRenderer<TileEn
             }
         }
         draw(font, word, left, top, 0.4F, scale, tube);
+        BATCH.flush();
 
         GlStateManager.enableCull();
         GlStateManager.enableLighting();
@@ -78,11 +82,7 @@ public class TileEntityNeonSignRenderer extends TileEntitySpecialRenderer<TileEn
 
     private static void draw(FontRenderer font, String text, float x, float y, float z,
                              float scale, int rgb) {
-        GlStateManager.pushMatrix();
-        GlStateManager.translate(x, y, z);
-        GlStateManager.scale(scale, scale, 1.0F);
-        font.drawString(text, 0, 0, rgb);
-        GlStateManager.popMatrix();
+        BATCH.text(font, text, x, y, z, scale, 0.0F, rgb, false);
     }
 
     /** Pushes a dye colour toward white, so the tube reads as lit rather than painted. */
