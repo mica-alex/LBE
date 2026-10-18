@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "group": "lbe:casino_decor",
+  "pattern": [
+    "PPP",
+    "DDD",
+    "PPP"
+  ],
+  "key": {
+    "P": {
+      "type": "forge:ore_dict",
+      "ore": "paneGlass"
+    },
+    "D": {
+      "type": "forge:ore_dict",
+      "ore": "dustGlowstone"
+    }
+  },
+  "result": {
+    "item": "lbe:neon_sign",
+    "count": 1
+  }
+}

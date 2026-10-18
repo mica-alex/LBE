@@ -79,6 +79,7 @@ tile.lbe.neon_sign.name=Neon Sign
 tile.lbe.casino_plaque.name=Casino Plaque
 tile.lbe.casino_bouncer.name=Bouncer
 tile.lbe.cashier_cage.name=Cashier's Cage
+tile.lbe.cashier_grille.name=Cashier's Grille
 tile.lbe.bar_counter.name=Bar Counter
 tile.lbe.bar_shelf.name=Back Bar Shelf
 tile.lbe.chip_stacks.name=Chip Stacks

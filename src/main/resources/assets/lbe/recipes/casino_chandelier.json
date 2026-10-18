@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "group": "lbe:casino_decor",
+  "pattern": [
+    " G ",
+    "GLG",
+    " P "
+  ],
+  "key": {
+    "G": {
+      "type": "forge:ore_dict",
+      "ore": "ingotGold"
+    },
+    "L": {
+      "item": "minecraft:glowstone"
+    },
+    "P": {
+      "type": "forge:ore_dict",
+      "ore": "paneGlass"
+    }
+  },
+  "result": {
+    "item": "lbe:casino_chandelier",
+    "count": 1
+  }
+}

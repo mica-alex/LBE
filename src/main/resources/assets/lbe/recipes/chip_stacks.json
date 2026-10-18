@@ -1,0 +1,30 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "group": "lbe:casino_decor",
+  "ingredients": [
+    {
+      "type": "forge:ore_dict",
+      "ore": "dyeRed"
+    },
+    {
+      "type": "forge:ore_dict",
+      "ore": "dyeGreen"
+    },
+    {
+      "type": "forge:ore_dict",
+      "ore": "dyeBlack"
+    },
+    {
+      "type": "forge:ore_dict",
+      "ore": "dyeBlue"
+    },
+    {
+      "type": "forge:ore_dict",
+      "ore": "nuggetGold"
+    }
+  ],
+  "result": {
+    "item": "lbe:chip_stacks",
+    "count": 2
+  }
+}

@@ -84,6 +84,10 @@ public final class CasinoBlocks {
             new com.micatechnologies.minecraft.lbe.casino.decor.BlockBouncer(),
             new com.micatechnologies.minecraft.lbe.casino.decor.BlockFloorPiece("cashier_cage",
                 Material.WOOD, SoundType.WOOD, 2.0F, Block.FULL_BLOCK_AABB),
+            // Stacks on the cage counter to take its bars up to the ceiling.
+            new com.micatechnologies.minecraft.lbe.casino.decor.BlockFloorPiece("cashier_grille",
+                Material.IRON, SoundType.METAL, 2.0F,
+                new AxisAlignedBB(0.0D, 0.0D, 0.4375D, 1.0D, 1.0D, 0.5625D)),
             new com.micatechnologies.minecraft.lbe.casino.decor.BlockFloorPiece("bar_counter",
                 Material.WOOD, SoundType.WOOD, 2.0F,
                 new AxisAlignedBB(0.0D, 0.0D, 0.0D, 1.0D, 0.875D, 1.0D)),

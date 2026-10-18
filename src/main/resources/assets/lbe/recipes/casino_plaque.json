@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "group": "lbe:casino_decor",
+  "pattern": [
+    "NNN",
+    "NWN",
+    "NNN"
+  ],
+  "key": {
+    "N": {
+      "type": "forge:ore_dict",
+      "ore": "nuggetGold"
+    },
+    "W": {
+      "item": "minecraft:wool",
+      "data": 15
+    }
+  },
+  "result": {
+    "item": "lbe:casino_plaque",
+    "count": 2
+  }
+}

@@ -229,7 +229,7 @@ the pack author finds out weeks later.
 
 ## Crafting: upgrades only
 
-Three shapeless recipes, and no others:
+Three shapeless recipes make boxes, and no others:
 
 | Recipe | Result |
 | --- | --- |

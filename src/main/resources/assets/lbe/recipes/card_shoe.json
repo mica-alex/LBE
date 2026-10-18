@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "group": "lbe:casino_decor",
+  "ingredients": [
+    {
+      "item": "minecraft:paper"
+    },
+    {
+      "item": "minecraft:paper"
+    },
+    {
+      "item": "minecraft:paper"
+    },
+    {
+      "item": "minecraft:wool",
+      "data": 15
+    }
+  ],
+  "result": {
+    "item": "lbe:card_shoe",
+    "count": 1
+  }
+}

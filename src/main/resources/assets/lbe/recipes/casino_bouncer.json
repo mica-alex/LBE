@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "group": "lbe:casino_decor",
+  "pattern": [
+    "W",
+    "A",
+    "W"
+  ],
+  "key": {
+    "W": {
+      "item": "minecraft:wool",
+      "data": 15
+    },
+    "A": {
+      "item": "minecraft:armor_stand"
+    }
+  },
+  "result": {
+    "item": "lbe:casino_bouncer",
+    "count": 1
+  }
+}

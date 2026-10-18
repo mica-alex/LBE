@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "group": "lbe:casino_decor",
+  "pattern": [
+    "W",
+    "G",
+    "G"
+  ],
+  "key": {
+    "W": {
+      "item": "minecraft:wool",
+      "data": 14
+    },
+    "G": {
+      "type": "forge:ore_dict",
+      "ore": "ingotGold"
+    }
+  },
+  "result": {
+    "item": "lbe:velvet_rope_post",
+    "count": 2
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "group": "lbe:casino_decor",
+  "pattern": [
+    "BB"
+  ],
+  "key": {
+    "B": {
+      "item": "lbe:casino_carpet_royal_block"
+    }
+  },
+  "result": {
+    "item": "lbe:casino_carpet_royal",
+    "count": 3
+  }
+}

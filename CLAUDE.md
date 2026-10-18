@@ -183,6 +183,8 @@ presumed camera lean needed one and found `EntityViewRenderEvent.CameraSetup` al
   and `items/`) are **generated** by `tools/gen_box_textures.py` (loot boxes),
   `tools/gen_casino_textures.py` and `tools/gen_slot_textures.py` (machines). Edit the script, not
   the PNGs, unless you are replacing them with real art.
+- The decor's crafting recipes and their recipe-book advancements are **generated** by
+  `tools/gen_decor_recipes.py`. Decor only: machines and boxes are deliberately uncraftable.
 - The casino machines' block models and blockstates are **generated** by
   `tools/gen_casino_models.py`. Two of its numbers, the screen recess depth and the felt height,
   are mirrored in `TileEntityCasinoMachineRenderer`'s offsets. Change one and change the other, or
