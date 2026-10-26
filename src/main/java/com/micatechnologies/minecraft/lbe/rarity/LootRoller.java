@@ -19,18 +19,31 @@ public final class LootRoller {
     }
 
     /**
-     * Roll the contents of one box.
+     * Roll the contents of one box with every item in a tier equally likely.
      *
-     * @param boxTier the box's own tier
-     * @param table   the scored catalogue to draw from
-     * @param rules   how generous to be
-     * @param random  the source of randomness; seed it per box if you want stable contents
-     * @return the entries, possibly empty if the table has nothing to give
+     * @see #roll(Rarity, LootPools, LootRules, Random)
      */
     public static List<RolledEntry> roll(Rarity boxTier, RarityTable table, LootRules rules,
                                          Random random) {
-        List<RolledEntry> rolled = new ArrayList<>();
         if (table == null || table.size() == 0) {
+            return new ArrayList<>();
+        }
+        return roll(boxTier, LootPools.uniform(table), rules, random);
+    }
+
+    /**
+     * Roll the contents of one box.
+     *
+     * @param boxTier the box's own tier
+     * @param pools   the weighted tiers to draw from
+     * @param rules   how generous to be
+     * @param random  the source of randomness; seed it per box if you want stable contents
+     * @return the entries, possibly empty if no tier has anything to give
+     */
+    public static List<RolledEntry> roll(Rarity boxTier, LootPools pools, LootRules rules,
+                                         Random random) {
+        List<RolledEntry> rolled = new ArrayList<>();
+        if (pools == null) {
             return rolled;
         }
         int features = between(rules.minFeatures(boxTier), rules.maxFeatures(boxTier), random);
@@ -42,10 +55,10 @@ public final class LootRoller {
         // peaks in its opening second and then shows you three lumps of cobblestone. Building to the
         // feature is the entire shape of the moment.
         for (int i = 0; i < total - features; i++) {
-            addEntry(rolled, fillerTier(boxTier, rules, random), table, rules, random);
+            addEntry(rolled, fillerTier(boxTier, rules, random), pools, rules, random);
         }
         for (int i = 0; i < features; i++) {
-            addEntry(rolled, featureTier(boxTier, rules, random), table, rules, random);
+            addEntry(rolled, featureTier(boxTier, rules, random), pools, rules, random);
         }
         return rolled;
     }
@@ -54,13 +67,23 @@ public final class LootRoller {
         return max > min ? min + random.nextInt(max - min + 1) : min;
     }
 
-    private static void addEntry(List<RolledEntry> rolled, Rarity drawTier, RarityTable table,
+    /**
+     * Draw one item and a pile size for it.
+     *
+     * <p>An empty tier is not a hypothetical. A tiny pack, an aggressive blacklist, a weight list
+     * that zeroes a whole tier, or a config that put every cut point close together can all leave a
+     * tier with nothing to give, and a box that silently produces nothing reads as a bug to a
+     * player. {@link LootPools#draw} walks <b>down</b> to a tier that has something, so the failure
+     * mode is a disappointing box, never a free jackpot.</p>
+     */
+    private static void addEntry(List<RolledEntry> rolled, Rarity drawTier, LootPools pools,
                                  LootRules rules, Random random) {
-        String key = drawFrom(table, drawTier, random);
+        String key = pools.draw(drawTier, random);
         if (key == null) {
             return;
         }
-        int count = 1 + random.nextInt(Math.max(1, rules.maxStackPerRoll(drawTier)));
+        int cap = pools.maxStackFor(key, rules.maxStackPerRoll(drawTier));
+        int count = 1 + random.nextInt(Math.max(1, cap));
         rolled.add(new RolledEntry(key, count, drawTier));
     }
 
@@ -97,25 +120,6 @@ public final class LootRoller {
             tier--;
         }
         return Rarity.values()[tier];
-    }
-
-    /**
-     * Pick one item uniformly from a tier, walking <b>down</b> to a populated tier if that one is
-     * empty.
-     *
-     * <p>An empty tier is not a hypothetical. A tiny pack, or an aggressive blacklist, or a config
-     * that put every cut point close together can all leave a tier with nothing in it — and a box
-     * that silently produces nothing reads as a bug to a player. Walking down rather than up means
-     * the failure mode is a disappointing box, never a free jackpot.</p>
-     */
-    private static String drawFrom(RarityTable table, Rarity tier, Random random) {
-        for (int ordinal = tier.ordinal(); ordinal >= 0; ordinal--) {
-            List<String> pool = table.itemsOf(Rarity.values()[ordinal]);
-            if (!pool.isEmpty()) {
-                return pool.get(random.nextInt(pool.size()));
-            }
-        }
-        return null;
     }
 
     /** One line of a rolled box: which item, how many, and the tier it was drawn from. */

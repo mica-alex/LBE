@@ -33,6 +33,7 @@ import net.minecraft.util.text.TextComponentString;
  * <pre>
  *   /lbe rarity [item]     the tier of the held item (or a named one), with the full score breakdown
  *   /lbe dump              write the whole scored catalogue to rarity-dumps/
+ *   /lbe weights &lt;tier&gt; [n] the items a tier's draw lands on most, with their share
  *   /lbe reload            re-read the config and rebuild the catalogue
  *   /lbe give &lt;tier&gt; [n]   give yourself loot boxes
  *   /lbe place &lt;tier&gt;      place a box where you are looking
@@ -47,7 +48,7 @@ public class CommandLbe extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/lbe <rarity|dump|reload|give|place|loottables>";
+        return "/lbe <rarity|dump|weights|reload|give|place|loottables>";
     }
 
     /**
@@ -75,6 +76,9 @@ public class CommandLbe extends CommandBase {
         }
         else if ("dump".equals(subcommand)) {
             dump(server, sender);
+        }
+        else if ("weights".equals(subcommand)) {
+            weights(sender, args);
         }
         else if ("reload".equals(subcommand)) {
             reload(sender);
@@ -109,6 +113,21 @@ public class CommandLbe extends CommandBase {
         // Sent line by line rather than as one message: the breakdown is a dozen lines, and the chat
         // window renders a single multi-line component as one unwrappable blob.
         for (String line : LootCatalog.explain(key).split("\n")) {
+            sender.sendMessage(new TextComponentString(line));
+        }
+    }
+
+    /**
+     * The items a tier's draw lands on most often, with each one's share. The quick check after
+     * editing {@code loot.lootWeights}: the dump has every weight, this has the result.
+     */
+    private void weights(ICommandSender sender, String[] args) throws CommandException {
+        if (args.length < 2) {
+            throw new WrongUsageException("/lbe weights <" + tierList() + "> [count]");
+        }
+        Rarity tier = requireTier(args[1]);
+        int count = args.length >= 3 ? parseInt(args[2], 1, 100) : 10;
+        for (String line : LootCatalog.weightSummary(tier, count)) {
             sender.sendMessage(new TextComponentString(line));
         }
     }
@@ -253,9 +272,10 @@ public class CommandLbe extends CommandBase {
                                           String[] args, BlockPos targetPos) {
         if (args.length == 1) {
             return getListOfStringsMatchingLastWord(args,
-                "rarity", "dump", "reload", "give", "place", "loottables");
+                "rarity", "dump", "weights", "reload", "give", "place", "loottables");
         }
-        if (args.length == 2 && ("give".equalsIgnoreCase(args[0]) || "place".equalsIgnoreCase(args[0]))) {
+        if (args.length == 2 && ("give".equalsIgnoreCase(args[0]) || "place".equalsIgnoreCase(args[0])
+            || "weights".equalsIgnoreCase(args[0]))) {
             List<String> tiers = new ArrayList<>();
             for (Rarity rarity : Rarity.values()) {
                 tiers.add(rarity.id());

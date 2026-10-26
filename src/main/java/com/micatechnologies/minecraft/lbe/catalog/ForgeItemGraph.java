@@ -2,10 +2,11 @@ package com.micatechnologies.minecraft.lbe.catalog;
 
 import com.micatechnologies.minecraft.lbe.Lbe;
 import com.micatechnologies.minecraft.lbe.rarity.CraftingRecipe;
+import com.micatechnologies.minecraft.lbe.rarity.ItemCategory;
 import com.micatechnologies.minecraft.lbe.rarity.ItemGraph;
 import com.micatechnologies.minecraft.lbe.rarity.ItemKeys;
 import com.micatechnologies.minecraft.lbe.rarity.ItemProfile;
-import com.micatechnologies.minecraft.lbe.rarity.KeyFilter;
+import com.micatechnologies.minecraft.lbe.rarity.LootEligibility;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -15,8 +16,14 @@ import java.util.List;
 import java.util.Map;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemBlock;
+import net.minecraft.item.ItemBow;
+import net.minecraft.item.ItemFood;
+import net.minecraft.item.ItemHoe;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.ItemSword;
+import net.minecraft.item.ItemTool;
 import net.minecraft.item.crafting.FurnaceRecipes;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.item.crafting.Ingredient;
@@ -57,31 +64,39 @@ public final class ForgeItemGraph implements ItemGraph {
     private final Map<String, CraftingRecipe> recipes;
     private final Map<String, ItemStack> templates;
     private final List<String> lootableKeys;
-    private final int excludedByBlacklist;
+    private final Map<String, String> displayNames;
+    private final Map<String, List<String>> categories;
+    private final Map<String, String> exclusions;
 
     private ForgeItemGraph(Map<String, ItemProfile> profiles, Map<String, CraftingRecipe> recipes,
                            Map<String, ItemStack> templates, List<String> lootableKeys,
-                           int excludedByBlacklist) {
+                           Map<String, String> displayNames, Map<String, List<String>> categories,
+                           Map<String, String> exclusions) {
         this.profiles = profiles;
         this.recipes = recipes;
         this.templates = templates;
         this.lootableKeys = Collections.unmodifiableList(lootableKeys);
-        this.excludedByBlacklist = excludedByBlacklist;
+        this.displayNames = displayNames;
+        this.categories = categories;
+        this.exclusions = Collections.unmodifiableMap(exclusions);
     }
 
     /**
      * Walk the registries and build the snapshot.
      *
-     * @param blacklist items that may not be handed out as loot. They are still profiled and still
-     *                  scored as ingredients — they are simply absent from {@link #keys()}, which is
-     *                  what the loot tables are drawn from. Excluding a command block from the loot
-     *                  pool must not make everything crafted from one look cheap.
+     * @param eligibility which items may be handed out as loot. The rest are still profiled and
+     *                    still scored as ingredients — they are simply absent from {@link #keys()},
+     *                    which is what the loot tables are drawn from. Excluding a command block
+     *                    from the loot pool must not make everything crafted from one look cheap.
      */
-    public static ForgeItemGraph snapshot(KeyFilter blacklist) {
+    public static ForgeItemGraph snapshot(LootEligibility eligibility) {
+        LootEligibility filter = eligibility == null ? LootEligibility.everything() : eligibility;
         Map<String, ItemProfile> profiles = new LinkedHashMap<>();
         Map<String, ItemStack> templates = new LinkedHashMap<>();
+        Map<String, String> displayNames = new HashMap<>();
+        Map<String, List<String>> categories = new HashMap<>();
+        Map<String, String> exclusions = new LinkedHashMap<>();
         List<String> lootableKeys = new ArrayList<>();
-        int excluded = 0;
 
         // Two coarse steps, not one per item. The per-item counts here come from iterating live
         // registries, and ProgressManager.pop throws on a step-count mismatch — a bar that can
@@ -102,8 +117,17 @@ public final class ForgeItemGraph implements ItemGraph {
                 }
                 profiles.put(key, profileOf(stack));
                 templates.put(key, stack.copy());
-                if (blacklist != null && blacklist.matches(key)) {
-                    excluded++;
+                String name = displayNameOf(stack);
+                if (name != null) {
+                    displayNames.put(key, name);
+                }
+                List<String> itemCategories = categoriesOf(stack);
+                if (!itemCategories.isEmpty()) {
+                    categories.put(key, itemCategories);
+                }
+                String reason = filter.exclusionReason(key, name);
+                if (reason != null) {
+                    exclusions.put(key, reason);
                 }
                 else {
                     lootableKeys.add(key);
@@ -111,19 +135,29 @@ public final class ForgeItemGraph implements ItemGraph {
             }
         }
 
-        Lbe.LOGGER.info("Profiled {} item variants ({} blacklisted); indexing recipes...",
-            profiles.size(), excluded);
+        Lbe.LOGGER.info("Profiled {} item variants ({} kept out of the loot pool: {}); "
+            + "indexing recipes...", profiles.size(), exclusions.size(), countByReason(exclusions));
         bar.step("recipes");
         Map<String, CraftingRecipe> recipes = collectRecipes(profiles);
         ProgressManager.pop(bar);
-        Lbe.LOGGER.info("Registry snapshot: {} item variants ({} blacklisted), {} recipes",
-            profiles.size(), excluded, recipes.size());
-        return new ForgeItemGraph(profiles, recipes, templates, lootableKeys, excluded);
+        Lbe.LOGGER.info("Registry snapshot: {} item variants ({} excluded from loot), {} recipes",
+            profiles.size(), exclusions.size(), recipes.size());
+        return new ForgeItemGraph(profiles, recipes, templates, lootableKeys, displayNames,
+            categories, exclusions);
     }
 
-    /** Convenience for the no-blacklist case, used by tests and by {@code /lbe} diagnostics. */
+    /** Convenience for the no-filter case, used by tests and by {@code /lbe} diagnostics. */
     public static ForgeItemGraph snapshot() {
-        return snapshot(KeyFilter.empty());
+        return snapshot(LootEligibility.everything());
+    }
+
+    private static Map<String, Integer> countByReason(Map<String, String> exclusions) {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (String reason : exclusions.values()) {
+            Integer count = counts.get(reason);
+            counts.put(reason, count == null ? 1 : count + 1);
+        }
+        return counts;
     }
 
     // --- ItemGraph -------------------------------------------------------------------------------
@@ -167,9 +201,23 @@ public final class ForgeItemGraph implements ItemGraph {
         return profiles.keySet();
     }
 
-    /** How many variants the blacklist removed from the loot pool. */
-    public int excludedByBlacklist() {
-        return excludedByBlacklist;
+    /**
+     * Every variant kept out of the loot pool, with the reason (one of the
+     * {@link LootEligibility} constants), in registry order. For {@code /lbe dump}.
+     */
+    public Map<String, String> exclusions() {
+        return exclusions;
+    }
+
+    /** The item's English name, or {@code null} if it could not be read. */
+    public String displayName(String key) {
+        return displayNames.get(key);
+    }
+
+    /** The item's {@link ItemCategory} ids, for loot weights. Never {@code null}. */
+    public List<String> categoriesOf(String key) {
+        List<String> found = categories.get(key);
+        return found == null ? Collections.<String>emptyList() : found;
     }
 
     /**
@@ -222,6 +270,69 @@ public final class ForgeItemGraph implements ItemGraph {
             return Collections.emptyList();
         }
         return variants;
+    }
+
+    /**
+     * The stack's name, from the English language table on a server and the player's own on a
+     * client.
+     *
+     * <p>{@code ItemStack#getDisplayName} is common code, but an item can override it with
+     * anything, including a call into a client-only class that only fails on a dedicated server.
+     * Same catch-all as {@link #variantsOf}: a missing name costs the dump a column and the
+     * creative-name check one of its two inputs, which is far cheaper than a crash.
+     * {@code Throwable}, not {@code Exception}, because that failure is a
+     * {@code NoClassDefFoundError}.</p>
+     */
+    private static String displayNameOf(ItemStack stack) {
+        try {
+            String name = stack.getDisplayName();
+            return name == null || name.isEmpty() ? null : name;
+        }
+        catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * Which {@link ItemCategory} kinds a stack is, worked out from its class and its ore-dictionary
+     * names so that no pack author has to write the list.
+     *
+     * <p>Class checks are {@code instanceof}, so a mod's own sword subclass is a weapon without
+     * anyone telling us. {@code getToolClasses} catches the modded tools that do not extend
+     * {@code ItemTool} (hammers, drills, multitools) but do report a harvest class. Third-party
+     * code again, so the same catch-all: an item we cannot read is simply in no category.</p>
+     */
+    private static List<String> categoriesOf(ItemStack stack) {
+        List<String> found = new ArrayList<>(2);
+        Item item = stack.getItem();
+        try {
+            if (item instanceof ItemFood) {
+                found.add(ItemCategory.FOOD);
+            }
+            if (item instanceof ItemTool || item instanceof ItemHoe
+                || !item.getToolClasses(stack).isEmpty()) {
+                found.add(ItemCategory.TOOL);
+            }
+            if (item instanceof ItemSword || item instanceof ItemBow) {
+                found.add(ItemCategory.WEAPON);
+            }
+            if (item instanceof ItemArmor) {
+                found.add(ItemCategory.ARMOR);
+            }
+            if (item instanceof ItemBlock) {
+                found.add(ItemCategory.BLOCK);
+            }
+            for (int id : OreDictionary.getOreIDs(stack)) {
+                String category = ItemCategory.forOreName(OreDictionary.getOreName(id));
+                if (category != null && !found.contains(category)) {
+                    found.add(category);
+                }
+            }
+        }
+        catch (Throwable t) {
+            Lbe.LOGGER.debug("Could not categorise {}", item.getRegistryName(), t);
+        }
+        return found;
     }
 
     private static ItemProfile profileOf(ItemStack stack) {

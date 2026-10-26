@@ -142,6 +142,18 @@ catalogue and both generalise straight to modded packs:
 | Machine/multiblock requirements | A recipe does not say "and you need a 5×5×5 structure first" in any readable way | `materialScores` on the output |
 | Mob drops and dungeon loot | Not recipes at all | `materialScores` |
 | Recipes gated behind research/quests | Mod-specific, no common API | `overrides` |
+| Machine-made items with no crafting recipe (IC2's UU-Matter) | Not recipes at all, so they score as raw | `overrides` (not `materialScores`, if the item is itself an ingredient you do not want inflated) |
+
+**No recipe also means "creative-only".** A creative generator is uncraftable on purpose, and to the
+walk that makes it a raw material: common tier, drawn more often than anything. The scorer cannot
+tell it from a log, so it is kept out of the pool before it is scored. `LootEligibility` applies
+four filters in order: the `blacklist`, a `creativeItems` list of known items whose names give
+nothing away, a check for any word in the registry path or English name that starts with
+`creative` or `admin` (`excludeCreativeAndAdmin`, on by default), and an optional `whitelist`.
+`creativeItems` is its own key rather than more blacklist defaults because Forge never rewrites a
+list a config file already has; only a new key reaches servers that already have a config.
+Excluded items are still scored as ingredients, and `/lbe dump` lists them last with the filter
+that caught them.
 
 **And some things will simply be wrong.** In the shipped vanilla catalogue, `carrot_on_a_stick` comes
 out legendary — it is unstackable, has durability, and sits three steps from a log via a fishing rod,
@@ -186,7 +198,10 @@ floor applied. That is the only sane way to work out whether an item needs a wei
 declared material value, or a plain tier override — and the answer is usually the third.
 
 `/lbe dump` writes the whole scored catalogue to a TSV, which is what to look at when the *shape* of
-the tiers seems wrong rather than one item.
+the tiers seems wrong rather than one item. Each row has the item's display name, so a meta variant
+like `ic2:te#86` reads as "Creative Generator", and a reason: `override`, `declared`, `recipe`, or
+`no-recipe`. Read the `no-recipe` rows first in a big pack; they are where scored-as-raw mistakes
+are.
 
 ## Where the code lives
 

@@ -1,6 +1,8 @@
 package com.micatechnologies.minecraft.lbe;
 
+import com.micatechnologies.minecraft.lbe.rarity.ItemPatternTable;
 import com.micatechnologies.minecraft.lbe.rarity.KeyFilter;
+import com.micatechnologies.minecraft.lbe.rarity.LootEligibility;
 import com.micatechnologies.minecraft.lbe.rarity.LootRules;
 import com.micatechnologies.minecraft.lbe.rarity.MaterialScores;
 import com.micatechnologies.minecraft.lbe.rarity.Rarity;
@@ -370,6 +372,7 @@ public final class LbeConfig {
         "minecraft:command_block",
         "minecraft:chain_command_block",
         "minecraft:repeating_command_block",
+        "minecraft:command_block_minecart",
         "minecraft:structure_block",
         "minecraft:structure_void",
         "minecraft:barrier",
@@ -380,6 +383,44 @@ public final class LbeConfig {
         // Our own boxes. A box that contains a box is a fine joke exactly once, and then it is an
         // unbounded chain that a player can farm without ever leaving the spot they are standing in.
         "lbe:*",
+    };
+
+    /**
+     * Keep items whose registry path or English name has a word starting with {@code creative} or
+     * {@code admin} out of the loot pool. See {@link LootEligibility#looksCreativeOrAdmin}.
+     */
+    public static boolean excludeCreativeAndAdmin = true;
+
+    /**
+     * Creative-only and admin-only items whose names give nothing away, as {@link KeyFilter}
+     * patterns. Its own key rather than more blacklist defaults because Forge never rewrites a list
+     * a config file already has: a server that has run LBE once would never see new blacklist
+     * defaults, but it does get a new key's. Each entry only matters when that mod is loaded.
+     */
+    public static String[] creativeItems = {
+        "# Creative-only or admin-only items that the name check cannot spot. Same forms as the",
+        "# blacklist. An entry for a mod that is not installed does nothing.",
+        "minecraft:command_block_minecart",
+        "ic2:te#86",
+        "buildcraftcore:engine#3",
+        "buildcraftlib:debugger",
+        "immersiveengineering:metal_device0#3",
+        "railcraft:admin_steam_producer",
+        "railcraft:cart_worldspike_admin",
+        "opencomputers:casecreative",
+        "littleframes:creative_frame",
+        "securitycraft:admin_tool",
+        "# The whole mod is creative-only tooling for building NPCs.",
+        "customnpcs:*",
+    };
+
+    /**
+     * When non-empty, the only items that may be loot, as {@link KeyFilter} patterns. Applied after
+     * every other filter, so a whitelisted item that is also blacklisted stays out.
+     */
+    public static String[] lootWhitelist = {
+        "# When this has any entries, ONLY matching items can be loot. Same forms as the blacklist.",
+        "# Empty (the default) means every item that is not excluded some other way.",
     };
 
     // --- loot: what a box is worth ----------------------------------------------------------------
@@ -412,6 +453,37 @@ public final class LbeConfig {
     /** @see LootRules#bleedUpChance() */
     public static double lootBleedUpChance = 0.04D;
 
+    /**
+     * How likely each item is to be picked within its own tier, as {@link ItemPatternTable} rules.
+     * Empty by default, which is the plain uniform pick.
+     */
+    public static String[] lootWeights = {
+        "# How likely an item is to be picked WITHIN its own tier. Never moves an item between",
+        "# tiers. One 'pattern=multiplier' per line; the default weight is 1, and 0 means never.",
+        "#   minecraft:bread=4        one item          minecraft:fish#*=3   every metadata variant",
+        "#   mts:*=0.25               a whole mod       @food=3              a category",
+        "# Categories: @food @tool @weapon @armor @ingot @gem @dust @ore @block",
+        "# The most specific rule wins: item, then #*, then mod, then categories. An item in",
+        "# several categories gets their weights multiplied (an ore block with @ore=2 and",
+        "# @block=0.5 weighs 1). For example, to favour things a survival player uses:",
+        "#   @food=3",
+        "#   @tool=3",
+        "#   @armor=2.5",
+        "#   @ingot=2",
+        "#   @block=0.5",
+    };
+
+    /**
+     * Pile-size caps per item or category, as {@link ItemPatternTable} rules, replacing
+     * {@link #lootMaxStackPerRoll} for what they match.
+     */
+    public static String[] lootCategoryMaxStack = {
+        "# Largest pile one entry may be, for what a rule matches. Replaces maxStackPerRoll for",
+        "# those items, in any tier. Same patterns as lootWeights; the most specific rule wins, and",
+        "# among categories the largest cap. The item's own stack limit still applies. Example:",
+        "#   @food=16",
+    };
+
     // --- overrides --------------------------------------------------------------------------------
 
     /**
@@ -435,6 +507,10 @@ public final class LbeConfig {
         "minecraft:enchanted_golden_apple=legendary",
         "# Wool is nine hundred recipes deep in some packs and is still just wool.",
         "minecraft:wool#*=common",
+        "# UU-Matter has no crafting recipe (a mass fabricator makes it), so it scores as cheap as",
+        "# cobblestone. An override and not a materialScores entry on purpose: IC2's replication",
+        "# recipes are crafted FROM UU-Matter, and a high score there would flow into all of them.",
+        "ic2:uu_matter=legendary",
     };
 
     private static Configuration config;
@@ -606,6 +682,22 @@ public final class LbeConfig {
             "Items that may never be GIVEN as loot. They are still scored as ingredients of things "
                 + "that can be — blacklisting a command block should not make everything built from "
                 + "one look cheap. Patterns: 'modid:name', 'modid:name#*', 'modid:*'.");
+        excludeCreativeAndAdmin = config.getBoolean("excludeCreativeAndAdmin", CATEGORY_RARITY,
+            excludeCreativeAndAdmin,
+            "Keep creative-only and admin items out of the loot pool: anything whose registry name "
+                + "or English name has a word starting with 'creative' or 'admin' (Creative "
+                + "Generator, admin_steam_producer, locomotive_creative). An item with no recipe "
+                + "scores as a raw material and lands in the common tier, so without this a common "
+                + "box can hand a survival player a creative generator. Turn it off only if a mod "
+                + "names real survival items that way, and blacklist the creative ones by hand.");
+        creativeItems = config.getStringList("creativeItems", CATEGORY_RARITY, creativeItems,
+            "Creative-only and admin items the name check above cannot spot, kept out of the loot "
+                + "pool. Applied whatever excludeCreativeAndAdmin says. Same patterns as the "
+                + "blacklist; an entry for a mod that is not installed does nothing.");
+        lootWhitelist = config.getStringList("whitelist", CATEGORY_RARITY, lootWhitelist,
+            "When this has any entries, ONLY matching items can be loot; everything else is "
+                + "still scored but never given. Applied after the blacklist and the creative "
+                + "filters. Same patterns as the blacklist.");
 
         config.addCustomCategoryComment(CATEGORY_LOOT,
             "What opening a box of each tier is actually worth. Independent of the scoring model "
@@ -650,6 +742,20 @@ public final class LbeConfig {
             "Chance that a FEATURE slot is drawn from the tier ABOVE the box's. The jackpot. Keep it "
                 + "small: a common box that regularly pays out legendary loot has abolished its own "
                 + "ladder.");
+        lootWeights = config.getStringList("lootWeights", CATEGORY_LOOT, lootWeights,
+            "How likely each item is to be picked WITHIN its own tier. Tiers are not changed: a "
+                + "weighted loaf of bread is still common and still only comes out of common "
+                + "slots. 'pattern=multiplier' per line, default 1, 0 to never pick. Patterns: "
+                + "'modid:name', 'modid:name#*', 'modid:*', or a category: @food @tool @weapon "
+                + "@armor @ingot @gem @dust @ore @block. Most specific wins; categories multiply. "
+                + "If every item in a tier weighs 0, that tier's slots fall to the tier below. "
+                + "/lbe weights <tier> shows the result.");
+        lootCategoryMaxStack = config.getStringList("categoryMaxStack", CATEGORY_LOOT,
+            lootCategoryMaxStack,
+            "Largest pile one entry may be for the items a rule matches, replacing maxStackPerRoll "
+                + "for them in every tier, e.g. '@food=16' so food arrives in useful amounts. Same "
+                + "patterns as lootWeights; most specific wins, and among categories the largest "
+                + "cap. The item's own stack limit still applies.");
 
         config.addCustomCategoryComment(CATEGORY_OVERRIDES,
             "Manual per-item rarity. This is the escape hatch for anything the automatic scoring "
@@ -796,9 +902,20 @@ public final class LbeConfig {
         return MaterialScores.parse(materialScores);
     }
 
-    /** The parsed loot blacklist. */
-    public static KeyFilter blacklist() {
-        return KeyFilter.parse(lootBlacklist);
+    /** The parsed within-tier draw weights. */
+    public static ItemPatternTable lootWeights() {
+        return ItemPatternTable.parse(lootWeights);
+    }
+
+    /** The parsed per-item and per-category pile caps. */
+    public static ItemPatternTable lootStackCaps() {
+        return ItemPatternTable.parse(lootCategoryMaxStack);
+    }
+
+    /** Every filter on what may be loot: blacklist, creative items, the name check, whitelist. */
+    public static LootEligibility lootEligibility() {
+        return new LootEligibility(KeyFilter.parse(lootBlacklist), KeyFilter.parse(creativeItems),
+            excludeCreativeAndAdmin, KeyFilter.parse(lootWhitelist));
     }
 
     /** Chance per chunk for one tier, safe against a short or absent config array. */

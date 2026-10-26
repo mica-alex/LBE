@@ -95,6 +95,8 @@ rarity/      The scoring model. Pure Java, ZERO Minecraft types.
   MaterialScores          declared values for what the walk cannot price
   RarityTable             percentile bucketing + overrides
   LootRules / LootRoller  what a box of each tier is worth
+  LootEligibility         what may be loot at all (blacklist, creative/admin, whitelist)
+  LootPools               per-tier weighted draw (loot.lootWeights, @categories)
 
 catalog/     The ONLY place that knows both worlds.
   ForgeItemGraph          walks ForgeRegistries.ITEMS / .RECIPES + FurnaceRecipes
@@ -102,14 +104,14 @@ catalog/     The ONLY place that knows both worlds.
 
 block/       BlockLootBox ×4 (one per tier) + TileEntityLootBox (the seed)
 world/       LootBoxWorldGen — per-chunk, per-tier, independent rolls
-command/     /lbe — rarity, dump, reload, give, place
+command/     /lbe — rarity, dump, weights, reload, give, place
 Lbe*.java    Forge plumbing: @Mod class, config, registry, creative tab, proxies
 ```
 
 ### Rules that are load-bearing — do not break these
 
 1. **`rarity` must never import a Minecraft type.** That is what makes the scoring model unit-testable
-   on a bare JVM (`./gradlew test` runs 58 tests in seconds with no game instance). Convert at
+   on a bare JVM (`./gradlew test` runs its tests in seconds with no game instance). Convert at
    `ForgeItemGraph`; if you need an `ItemStack`, build it in `LootCatalog`, not in `rarity`.
 
 2. **Common code must never reach client-only classes.** A stray `net.minecraft.client` import in

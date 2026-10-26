@@ -96,6 +96,7 @@ surface or in cave air pockets. Higher tiers glow.
 ```
 /lbe rarity [item]     tier + full term-by-term score breakdown for the held or named item
 /lbe dump              write the whole scored catalogue to rarity-dumps/*.tsv
+/lbe weights <tier> [n] the items a tier's draw lands on most, with their share
 /lbe reload            re-read the config and rebuild the catalogue
 /lbe give <tier> [n]   give yourself loot boxes, each separately seeded
 /lbe place <tier>      place a box where you stand
@@ -149,7 +150,9 @@ com.micatechnologies.minecraft.lbe
 │   ├── RarityWeights, RarityScorer      # the model itself, memoised and cycle-safe
 │   ├── MaterialScores                   # declared values — the scarcity input
 │   ├── RarityOverrides, KeyFilter       # the config's tier overrides and blacklist
-│   └── RarityTable, LootRules, LootRoller
+│   ├── LootEligibility                  # blacklist + creative/admin filters + whitelist
+│   ├── ItemCategory, ItemPatternTable   # @food/@tool categories; lootWeights grammar
+│   └── RarityTable, LootPools, LootRules, LootRoller
 ├── catalog/     # the ONLY place that knows both worlds
 │   ├── ForgeItemGraph                   # walks Forge's item + recipe registries
 │   └── LootCatalog                      # built once at postInit; rolls boxes

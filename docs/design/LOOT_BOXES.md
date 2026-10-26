@@ -152,6 +152,30 @@ are worth having**. Measured over 20,000 simulated boxes per tier at the default
 filler item can arrive as a stack of sixteen inside a legendary box while the legendary item beside
 it arrives as one. It is capped again at the item's real max stack size when the roll is realised.
 
+### Which item a slot lands on: loot weights
+
+Inside a tier, the pick is uniform unless `loot.lootWeights` says otherwise. Each rule is
+`pattern=multiplier`: an item (`minecraft:bread`), every variant (`minecraft:fish#*`), a whole mod
+(`mts:*`), or a category (`@food`, `@tool`, `@weapon`, `@armor`, `@ingot`, `@gem`, `@dust`, `@ore`,
+`@block`). Categories are worked out by `ForgeItemGraph` from the item's class and its ore-dictionary
+names, so nobody writes the list. The default weight is 1, and 0 takes an item out of the draw.
+
+Weights never move an item between tiers. A loaf of bread weighted ×4 is still common, still only
+comes out of common slots, and the box's tier mix above is unchanged. The point is a pack with
+thousands of decorative blocks: food and tools can come up more often without blacklisting every
+other mod.
+
+- **The most specific rule wins:** exact item, then `#*`, then `modid:*`, then categories.
+- **Categories multiply.** An ore block under `@ore=2` and `@block=0.5` weighs 1, not whichever
+  line came first.
+- **A tier weighted entirely to 0 counts as empty**, and its slots walk down like any empty tier.
+
+`LootPools` holds a cumulative-weight array per tier, built at each catalogue rebuild, so a draw is
+a binary search. `loot.categoryMaxStack` uses the same patterns to replace `maxStackPerRoll` for
+what it matches (`@food=16`, so food arrives in useful amounts). There, the largest matching
+category wins rather than the product. `/lbe weights <tier>` shows the items a tier lands on most and
+their share of the draw. The dump has every item's weight and categories.
+
 ### Filler falls away, it does not spread
 
 Filler starts one tier below the box and steps down again with probability `fillerTierFalloff`
@@ -217,7 +241,8 @@ thread for around a second on a large pack, and `give` produces items from nothi
 | Subcommand | Does |
 | --- | --- |
 | `rarity [item]` | Tier and full score breakdown for the held item, or a named one |
-| `dump` | Writes the whole scored catalogue to `rarity-dumps/*.tsv` |
+| `dump` | Writes the whole scored catalogue to `rarity-dumps/*.tsv`: tier, score, weight, name, categories, and why (excluded items last) |
+| `weights <tier> [n]` | The items a tier's draw lands on most, with each one's share |
 | `reload` | Re-reads the config **and** rebuilds the catalogue — both, in that order |
 | `give <tier> [n]` | Gives loot boxes |
 | `place <tier>` | Places a box at your feet |
